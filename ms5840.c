@@ -1,15 +1,15 @@
-/// \file ms8607.c
+/// \file ms5840.c
 ///
-/// \brief MS8607 Temperature sensor driver source file
+/// \brief MS5840 Temperature sensor driver source file
 ///
 /// Copyright (c) 2016 Measurement Specialties. All rights reserved.
 ///
-/// For details on programming, refer to ms8607 datasheet :
-/// http://www.meas-spec.com/downloads/MS8607D.pdf
+/// For details on programming, refer to ms5840 datasheet :
+/// https://www.tme.eu/Document/365c00a8a24c1e520dd30a20356b788d/ENG_DS_MS5840-02BA_A5.pdf
 ///
 ///
 
-#include "ms8607.h"
+#include "ms5840.h"
 
 #include <assert.h>
 
@@ -119,55 +119,55 @@ static uint32_t psensor_conversion_time[6] = {
 
 // Static functions
 // humidity sensor functions
-static enum ms8607_status hsensor_reset(ms8607_sensor *sensor, void* caller_context);
-static bool hsensor_is_connected(ms8607_sensor *sensor, void* caller_context);
-static enum ms8607_status hsensor_write_command(ms8607_sensor *sensor, uint8_t, void *caller_context);
-static enum ms8607_status hsensor_write_command_no_stop(ms8607_sensor *sensor, uint8_t, void *caller_context);
-static enum ms8607_status hsensor_crc_check( uint16_t, uint8_t);
-static enum ms8607_status hsensor_write_user_register(ms8607_sensor *sensor, uint8_t, void *caller_context);
-static enum ms8607_status hsensor_humidity_conversion_and_read_adc(ms8607_sensor *sensor, uint16_t *, void *caller_context);
-static enum ms8607_status hsensor_read_relative_humidity(ms8607_sensor *sensor, int32_t *, void *caller_context);
+static enum ms5840_status hsensor_reset(ms5840_sensor *sensor, void* caller_context);
+static bool hsensor_is_connected(ms5840_sensor *sensor, void* caller_context);
+static enum ms5840_status hsensor_write_command(ms5840_sensor *sensor, uint8_t, void *caller_context);
+static enum ms5840_status hsensor_write_command_no_stop(ms5840_sensor *sensor, uint8_t, void *caller_context);
+static enum ms5840_status hsensor_crc_check( uint16_t, uint8_t);
+static enum ms5840_status hsensor_write_user_register(ms5840_sensor *sensor, uint8_t, void *caller_context);
+static enum ms5840_status hsensor_humidity_conversion_and_read_adc(ms5840_sensor *sensor, uint16_t *, void *caller_context);
+static enum ms5840_status hsensor_read_relative_humidity(ms5840_sensor *sensor, int32_t *, void *caller_context);
 
 // Pressure sensor functions
-static enum ms8607_status psensor_reset(ms8607_sensor *sensor, void* caller_context);
-static bool psensor_is_connected(ms8607_sensor *sensor, void *caller_context);
-static enum ms8607_status psensor_write_command(ms8607_sensor *sensor, uint8_t, void *caller_context);
-static enum ms8607_status psensor_read_eeprom_coeff(ms8607_sensor *sensor, uint8_t, uint16_t*, void *caller_context);
-static enum ms8607_status psensor_read_eeprom(ms8607_sensor *sensor, void *caller_context);
-static enum ms8607_status psensor_conversion_and_read_adc(ms8607_sensor *sensor, uint8_t, uint32_t *, void *caller_context);
+static enum ms5840_status psensor_reset(ms5840_sensor *sensor, void* caller_context);
+static bool psensor_is_connected(ms5840_sensor *sensor, void *caller_context);
+static enum ms5840_status psensor_write_command(ms5840_sensor *sensor, uint8_t, void *caller_context);
+static enum ms5840_status psensor_read_eeprom_coeff(ms5840_sensor *sensor, uint8_t, uint16_t*, void *caller_context);
+static enum ms5840_status psensor_read_eeprom(ms5840_sensor *sensor, void *caller_context);
+static enum ms5840_status psensor_conversion_and_read_adc(ms5840_sensor *sensor, uint8_t, uint32_t *, void *caller_context);
 static bool psensor_crc_check (uint16_t *n_prom, uint8_t crc);
-static enum ms8607_status psensor_read_pressure_and_temperature(ms8607_sensor *sensor, int32_t *, int32_t *, void *caller_context);
+static enum ms5840_status psensor_read_pressure_and_temperature(ms5840_sensor *sensor, int32_t *, int32_t *, void *caller_context);
 
-static enum ms8607_status
-	i2c_controller_read_unimpl(void *caller_context, ms8607_i2c_controller_packet *const packet)
+static enum ms5840_status
+	i2c_controller_read_unimpl(void *caller_context, ms5840_i2c_controller_packet *const packet)
 {
 	(void)caller_context;
 	(void)packet;
-	return ms8607_status_i2c_read_unimplemented;
+	return ms5840_status_i2c_read_unimplemented;
 }
 
-static enum ms8607_status
-	i2c_controller_write_unimpl(void *caller_context, ms8607_i2c_controller_packet *const packet)
+static enum ms5840_status
+	i2c_controller_write_unimpl(void *caller_context, ms5840_i2c_controller_packet *const packet)
 {
 	(void)caller_context;
 	(void)packet;
-	return ms8607_status_i2c_write_unimplemented;
+	return ms5840_status_i2c_write_unimplemented;
 }
 
-static enum ms8607_status
-	i2c_controller_write_no_stop_unimpl(void *caller_context, ms8607_i2c_controller_packet *const packet)
+static enum ms5840_status
+	i2c_controller_write_no_stop_unimpl(void *caller_context, ms5840_i2c_controller_packet *const packet)
 {
 	(void)caller_context;
 	(void)packet;
-	return ms8607_status_i2c_write_no_stop_unimplemented;
+	return ms5840_status_i2c_write_no_stop_unimplemented;
 }
 
-static enum ms8607_status
+static enum ms5840_status
 	sleep_ms_unimpl(void *caller_context, uint32_t milliseconds)
 {
 	(void)caller_context;
 	(void)milliseconds;
-	return ms8607_status_sleep_ms_unimplemented;
+	return ms5840_status_sleep_ms_unimplemented;
 }
 
 static void print_string_stub(void *caller_context, const char *text)
@@ -176,7 +176,7 @@ static void print_string_stub(void *caller_context, const char *text)
 	(void)text;
 }
 
-static void print_int64_stub(void *caller_context,  int64_t number, uint8_t pad_width,  ms8607_bool  pad_with_zeroes)
+static void print_int64_stub(void *caller_context,  int64_t number, uint8_t pad_width,  ms5840_bool  pad_with_zeroes)
 {
 	(void)caller_context;
 	(void)number;
@@ -184,13 +184,13 @@ static void print_int64_stub(void *caller_context,  int64_t number, uint8_t pad_
 	(void)pad_with_zeroes;
 }
 
-/// \brief Initializes the `ms8607_host_functions` struct; this should be called
+/// \brief Initializes the `ms5840_host_functions` struct; this should be called
 ///        *before* assigning function pointers into the structure.
 ///
-static enum ms8607_status ms8607_init_host_functions(ms8607_host_functions *deps)
+static enum ms5840_status ms5840_init_host_functions(ms5840_host_functions *deps)
 {
 	if ( deps == NULL )
-		return ms8607_status_null_argument;
+		return ms5840_status_null_argument;
 
 	deps->validated_ = 0;
 
@@ -201,23 +201,23 @@ static enum ms8607_status ms8607_init_host_functions(ms8607_host_functions *deps
 	deps->print_string                  = &print_string_stub;
 	deps->print_int64                   = &print_int64_stub;
 
-	return ms8607_status_ok;
+	return ms5840_status_ok;
 }
 
-static enum ms8607_status  ms8607_validate_mandatory_depends(ms8607_host_functions *deps)
+static enum ms5840_status  ms5840_validate_mandatory_depends(ms5840_host_functions *deps)
 {
 	assert(deps != NULL);
 
 	if ( deps->validated_ )
-		return ms8607_status_ok;
+		return ms5840_status_ok;
 
 	if ( deps->i2c_controller_read == NULL
 	||   deps->i2c_controller_read == &i2c_controller_read_unimpl )
-		return ms8607_status_i2c_read_unimplemented;
+		return ms5840_status_i2c_read_unimplemented;
 	else
 	if ( deps->i2c_controller_write == NULL
 	||   deps->i2c_controller_write == &i2c_controller_write_unimpl )
-		return ms8607_status_i2c_write_unimplemented;
+		return ms5840_status_i2c_write_unimplemented;
 	/*
 	// It's actually OK to be missing the `i2c_controller_write_no_stop` function.
 	// The write-no-stop function is only needed for hold-mode ADC.
@@ -231,23 +231,23 @@ static enum ms8607_status  ms8607_validate_mandatory_depends(ms8607_host_functio
 	else
 	if ( deps->i2c_controller_write_no_stop == NULL
 	||   deps->i2c_controller_write_no_stop == &i2c_controller_write_no_stop_unimpl )
-		return ms8607_status_i2c_write_no_stop_unimplemented;
+		return ms5840_status_i2c_write_no_stop_unimplemented;
 	*/
 	else
 	if ( deps->sleep_ms == NULL
 	||   deps->sleep_ms == &sleep_ms_unimpl )
-		return ms8607_status_sleep_ms_unimplemented;
+		return ms5840_status_sleep_ms_unimplemented;
 
 	// Under no condition should any of the function pointers be NULL.
 	// Even unimplemented things should be assigned error handlers or stubs
-	// by the `ms8607_init_host_functions` function.
+	// by the `ms5840_init_host_functions` function.
 	if( deps->i2c_controller_read == NULL
 	||  deps->i2c_controller_write == NULL
 	||  deps->i2c_controller_write_no_stop == NULL
 	||  deps->sleep_ms == NULL
 	||  deps->print_string == NULL
 	||  deps->print_int64 == NULL )
-		return ms8607_status_null_host_function;
+		return ms5840_status_null_host_function;
 
 	// If we've made it to the end of this function, then it is at least plausible
 	// that the driver can use this host functions object to do *something*.
@@ -255,49 +255,49 @@ static enum ms8607_status  ms8607_validate_mandatory_depends(ms8607_host_functio
 	// didn't check here. However, absent a more complicated configuration system,
 	// we'll just have to check those later, at point-of-use.)
 	deps->validated_ = 1;
-	return ms8607_status_ok;
+	return ms5840_status_ok;
 }
 
-/// \brief    Creates a `ms8607_host_functions` object (the `dependencies` parameter)
+/// \brief    Creates a `ms5840_host_functions` object (the `dependencies` parameter)
 ///           to store function pointers that implement the driver's dependencies.
 ///
-/// \details  The purpose of this function is to create a `ms8607_host_functions`
-///           object, which can then be used by the MS8607 driver to satisfy
+/// \details  The purpose of this function is to create a `ms5840_host_functions`
+///           object, which can then be used by the MS5840 driver to satisfy
 ///           its dependencies.
 ///
-///           This must be called before calling the `ms8607_init_sensor`
-///           function, as the `ms8607_init_sensor` function requires the
-///           `ms8607_host_functions` object that is populated by this function.
+///           This must be called before calling the `ms5840_init_sensor`
+///           function, as the `ms5840_init_sensor` function requires the
+///           `ms5840_host_functions` object that is populated by this function.
 ///
 ///           This function works in 3 steps:
 ///
-///           (1) It initializes the `ms8607_host_functions` object
+///           (1) It initializes the `ms5840_host_functions` object
 ///             given by the `dependencies` parameter. This places the object
 ///             into a known state so that the 3rd phase of this function can
 ///             know which functions were implemented by the caller/host.
 ///
 ///           (2) It calls the given `assign_functions` callback on `dependencies`.
 ///             The callback should create function pointers from host functions
-///             that implement the various requirements of the MS8607 driver,
+///             that implement the various requirements of the MS5840 driver,
 ///             such as I2C I/O and timing mechanisms. Those function pointers
 ///             should be assigned to the various members of the `dependencies`
-///             structure. See the `ms8607_host_functions` for details on the
+///             structure. See the `ms5840_host_functions` for details on the
 ///             necessary functions.
 ///
 ///           (3) After the callback returns, this function then validates
-///             the resulting `ms8607_host_functions` object to ensure that
+///             the resulting `ms5840_host_functions` object to ensure that
 ///             minimal requirements are met. Appropriate error codes are
 ///             returned if the driver's dependencies were not satisfied.
 ///
 ///           The `assign_functions` callback shall NOT assign NULL to any
-///           members of the `ms8607_host_functions *dependencies` structure.
+///           members of the `ms5840_host_functions *dependencies` structure.
 ///           When a function pointer is optional and no implementation
 ///           is available, `assign_functions` should leave that member
 ///           unmodified.
 ///
-///           The `ms8607_init_and_assign_host_functions` function will
+///           The `ms5840_init_and_assign_host_functions` function will
 ///           have already assigned stubs (and missing requirement detectors)
-///           to the members of the `ms8607_host_functions` structure.
+///           to the members of the `ms5840_host_functions` structure.
 ///
 ///           This function is reentrant, idempotent, non-blocking,
 ///           and does not perform any I/O. These properties assume that
@@ -307,31 +307,31 @@ static enum ms8607_status  ms8607_validate_mandatory_depends(ms8607_host_functio
 ///           read from or write to the objects pointed to by this function's
 ///           arguments.
 ///
-/// \param[out] ms8607_host_functions* : Struct with callbacks that implement I2C controller functions.
+/// \param[out] ms5840_host_functions* : Struct with callbacks that implement I2C controller functions.
 /// \param[in] void* caller_context : This is passed to the `assign_functions`
 ///           callback's `caller_context` parameter.
-/// \param[in] void (*assign_functions)(ms8607_host_functions *dependencies, void *caller_context):
+/// \param[in] void (*assign_functions)(ms5840_host_functions *dependencies, void *caller_context):
 ///           Pointer to a caller-implemented function that shall assign pointers
 ///           to implementation functions that are required by the driver.
 ///
-/// \return ms8607_status : status of MS8607
-///       - ms8607_status_null_argument : Returned if the `dependencies` or `assign_functions` parameters were NULL.
-///       - ms8607_status_null_host_function : Returned if NULL was assigned to any of the members of `dependencies`.
-///       - ms8607_status_i2c_read_unimplemented : Returned if the `i2c_controller_read` function was not assigned.
-///       - ms8607_status_i2c_write_unimplemented : Returned if the `i2c_controller_write` function was not assigned.
-///       - ms8607_status_sleep_ms_unimplemented : Returned if the `sleep_ms` function was not assigned.
+/// \return ms5840_status : status of MS5840
+///       - ms5840_status_null_argument : Returned if the `dependencies` or `assign_functions` parameters were NULL.
+///       - ms5840_status_null_host_function : Returned if NULL was assigned to any of the members of `dependencies`.
+///       - ms5840_status_i2c_read_unimplemented : Returned if the `i2c_controller_read` function was not assigned.
+///       - ms5840_status_i2c_write_unimplemented : Returned if the `i2c_controller_write` function was not assigned.
+///       - ms5840_status_sleep_ms_unimplemented : Returned if the `sleep_ms` function was not assigned.
 ///
-enum ms8607_status ms8607_init_and_assign_host_functions(
-	ms8607_host_functions *dependencies,
+enum ms5840_status ms5840_init_and_assign_host_functions(
+	ms5840_host_functions *dependencies,
 	void *caller_context,
-	void (*assign_functions)(ms8607_host_functions *dependencies, void *caller_context)
+	void (*assign_functions)(ms5840_host_functions *dependencies, void *caller_context)
 	)
 {
-	enum ms8607_status status;
+	enum ms5840_status status;
 
-	// The call to `ms8607_init_host_functions` will enforce that `dependencies` is non-NULL.
-	status = ms8607_init_host_functions(dependencies);
-	if ( status != ms8607_status_ok )
+	// The call to `ms5840_init_host_functions` will enforce that `dependencies` is non-NULL.
+	status = ms5840_init_host_functions(dependencies);
+	if ( status != ms5840_status_ok )
 		return status;
 
 	// It's OK if `caller_context` is NULL.
@@ -345,21 +345,21 @@ enum ms8607_status ms8607_init_and_assign_host_functions(
 
 	assign_functions(dependencies, caller_context);
 
-	return ms8607_validate_mandatory_depends(dependencies);
+	return ms5840_validate_mandatory_depends(dependencies);
 }
 
-/// \brief    Initializes a new `ms8607_sensor` object.
+/// \brief    Initializes a new `ms5840_sensor` object.
 ///
 /// \details  This function's purpose is to place the given `new_sensor`
 ///           argument into a predictable state and provide it with some
 ///           default configuration. This function does not actually communicate
 ///           with the sensor in any way.
 ///
-///           This must be called after `ms8607_init_and_assign_host_functions`
+///           This must be called after `ms5840_init_and_assign_host_functions`
 ///           has been called at least once (to obtain the argument for the
 ///           `depends_to_use` parameter), and it must be called before any
-///           other function that requires a `ms8607_sensor*` type parameter
-///           (usually `ms8607_reset`).
+///           other function that requires a `ms5840_sensor*` type parameter
+///           (usually `ms5840_reset`).
 ///
 ///           This function is reentrant, idempotent, non-blocking,
 ///           and does not perform any I/O. This function is thread-safe
@@ -367,63 +367,63 @@ enum ms8607_status ms8607_init_and_assign_host_functions(
 ///           read from or write to that call's `new_sensor` instance, and
 ///           no other threads write to that call's `depends_to_use` instance.
 ///
-/// \param[out] ms8607_sensor *new_sensor : The new sensor object.
-/// \param[in]  const ms8607_host_functions *depends_to_use : Specifies the
+/// \param[out] ms5840_sensor *new_sensor : The new sensor object.
+/// \param[in]  const ms5840_host_functions *depends_to_use : Specifies the
 ///           functions that this sensor can call to do things such as I2C I/O
 ///           and timing.
 ///
-/// \return ms8607_status : status of MS8607
-///       - ms8607_status_ok : Sensor object was initailized successfully
-///       - ms8607_status_null_sensor : The pointer provided for the `new_sensor` parameter was NULL.
-///       - ms8607_status_null_argument : The pointer provided for the `depends_to_use` parameter was NULL.
-///       - ms8607_status_i2c_read_unimplemented : Returned if the `i2c_controller_read` function was not assigned.
-///       - ms8607_status_i2c_write_unimplemented : Returned if the `i2c_controller_write` function was not assigned.
-///       - ms8607_status_sleep_ms_unimplemented : Returned if the `sleep_ms` function was not assigned.
+/// \return ms5840_status : status of MS5840
+///       - ms5840_status_ok : Sensor object was initailized successfully
+///       - ms5840_status_null_sensor : The pointer provided for the `new_sensor` parameter was NULL.
+///       - ms5840_status_null_argument : The pointer provided for the `depends_to_use` parameter was NULL.
+///       - ms5840_status_i2c_read_unimplemented : Returned if the `i2c_controller_read` function was not assigned.
+///       - ms5840_status_i2c_write_unimplemented : Returned if the `i2c_controller_write` function was not assigned.
+///       - ms5840_status_sleep_ms_unimplemented : Returned if the `sleep_ms` function was not assigned.
 ///
-enum ms8607_status  ms8607_init_sensor(ms8607_sensor *new_sensor,  ms8607_host_functions *depends_to_use)
+enum ms5840_status  ms5840_init_sensor(ms5840_sensor *new_sensor,  ms5840_host_functions *depends_to_use)
 {
-	enum ms8607_status status;
+	enum ms5840_status status;
 
 	if ( new_sensor == NULL )
-		return ms8607_status_null_sensor;
+		return ms5840_status_null_sensor;
 
 	if ( depends_to_use == NULL )
-		return ms8607_status_null_argument;
+		return ms5840_status_null_argument;
 
-	status = ms8607_validate_mandatory_depends(depends_to_use);
-	if ( status != ms8607_status_ok )
+	status = ms5840_validate_mandatory_depends(depends_to_use);
+	if ( status != ms5840_status_ok )
 		return status;
 
-	ms8607_sensor *s = new_sensor;
+	ms5840_sensor *s = new_sensor;
 	s->host_funcs                  = depends_to_use;
 
 	// Defaults
 	s->hsensor_conversion_time     = HSENSOR_CONVERSION_TIME_12b;
-	s->hsensor_i2c_controller_mode = ms8607_i2c_no_hold;
-	s->psensor_resolution_osr      = ms8607_pressure_resolution_osr_8192;
+	s->hsensor_i2c_controller_mode = ms5840_i2c_no_hold;
+	s->psensor_resolution_osr      = ms5840_pressure_resolution_osr_8192;
 	s->hsensor_heater_on           = false;
 	s->psensor_coeff_read          = false;
 
 	uint8_t i = 0;
-	for (; i < MS8607_COEFFICIENT_COUNT+1; i++)
+	for (; i < MS5840_COEFFICIENT_COUNT+1; i++)
 		s->eeprom_coeff[i] = 0;
 
-	return ms8607_status_ok;
+	return ms5840_status_ok;
 }
 
 /**
- * \brief Check whether MS8607 device is connected
+ * \brief Check whether MS5840 device is connected
  *
- * \param[in] ms8607_sensor *sensor : Sensor object to test for connectivity.
+ * \param[in] ms5840_sensor *sensor : Sensor object to test for connectivity.
  * \param[in] void* caller_context : When this function calls any callbacks
- *         from the `ms8607_host_functions` structure, this will be passed
+ *         from the `ms5840_host_functions` structure, this will be passed
  *         directly to those callbacks' `caller_context` parameter.
  *
- * \return bool : status of MS8607
+ * \return bool : status of MS5840
  *       - true : Device is present
  *       - false : Device is not acknowledging I2C address
   */
-bool ms8607_is_connected(ms8607_sensor *sensor,  void* caller_context)
+bool ms5840_is_connected(ms5840_sensor *sensor,  void* caller_context)
 {
 	return (
 		hsensor_is_connected(sensor, caller_context) &&
@@ -433,10 +433,10 @@ bool ms8607_is_connected(ms8607_sensor *sensor,  void* caller_context)
 
 // TODO:
 ///          If this function is not called before any other functions that
-///          communicate with the sensor sensor (ex: `ms8607_<TODO_function_name>`),
+///          communicate with the sensor sensor (ex: `ms5840_<TODO_function_name>`),
 ///          then it will be called automatically by the other function.
 ///
-///          Configuration that is stored locally within the `ms8607_sensor`
+///          Configuration that is stored locally within the `ms5840_sensor`
 ///          object, such as pressure resolution settings, will not be affected
 ///          by this function.
 ///
@@ -445,90 +445,90 @@ bool ms8607_is_connected(ms8607_sensor *sensor,  void* caller_context)
 ///          experience temporary changes during this function's execution,
 ///          but by the time this function returns, the sensor will (normally)
 ///          be brought into the (configuration) state that was described by
-///          the `ms8607_sensor` object at the beginning of the function call.
+///          the `ms5840_sensor` object at the beginning of the function call.
 ///          (The physical RESET causes the sensor to revert to factory settings,
-///          so the `ms8607_reset` will write the `ms8607_sensor` object's
+///          so the `ms5840_reset` will write the `ms5840_sensor` object's
 ///          settings to the sensor after the RESET completes.) (TODO: Verify. Implement.)
 
 
-/// \brief Reset the MS8607 device
+/// \brief Reset the MS5840 device
 ///
 /// \details
 ///           This function is reentrant. It blocks and performs I2C I/O.
 ///           It is thread-safe as long as, during this function's execution,
 ///           no other threads read from or write to the given `sensor` instance.
 ///
-/// \param[in] ms8607_sensor *sensor : Object representing the sensor to be reset.
+/// \param[in] ms5840_sensor *sensor : Object representing the sensor to be reset.
 /// \param[in] void* caller_context : When this function calls any callbacks
-///         from the `ms8607_host_functions` structure, this will be passed
+///         from the `ms5840_host_functions` structure, this will be passed
 ///         directly to those callbacks' `caller_context` parameter.
 ///
-/// \return ms8607_status : status of MS8607
-///       - ms8607_status_ok : I2C transfer completed successfully
-///       - ms8607_status_null_sensor : The pointer provided for the `sensor` parameter was NULL.
-///       - ms8607_status_callback_error : Error occurred within a ms8607_host_functions function
+/// \return ms5840_status : status of MS5840
+///       - ms5840_status_ok : I2C transfer completed successfully
+///       - ms5840_status_null_sensor : The pointer provided for the `sensor` parameter was NULL.
+///       - ms5840_status_callback_error : Error occurred within a ms5840_host_functions function
 ///
-enum ms8607_status  ms8607_reset(ms8607_sensor *sensor,  void* caller_context)
+enum ms5840_status  ms5840_reset(ms5840_sensor *sensor,  void* caller_context)
 {
 	if ( sensor == NULL )
-		return ms8607_status_null_sensor;
+		return ms5840_status_null_sensor;
 
-	enum ms8607_status status;
+	enum ms5840_status status;
 
 	status = hsensor_reset(sensor, caller_context);
-	if( status != ms8607_status_ok)
+	if( status != ms5840_status_ok)
 		return status;
 	status = psensor_reset(sensor, caller_context);
-	if( status != ms8607_status_ok)
+	if( status != ms5840_status_ok)
 		return status;
 
-	return ms8607_status_ok;
+	return ms5840_status_ok;
 }
 
 /// \brief Set humidity ADC resolution.
 ///
-/// \param[in] ms8607_sensor *sensor : Object representing the sensor to set humidity resolution on.
-/// \param[in] ms8607_humidity_resolution : Resolution requested
+/// \param[in] ms5840_sensor *sensor : Object representing the sensor to set humidity resolution on.
+/// \param[in] ms5840_humidity_resolution : Resolution requested
 /// \param[in] void* caller_context : When this function calls any callbacks
-///         from the `ms8607_host_functions` structure, this will be passed
+///         from the `ms5840_host_functions` structure, this will be passed
 ///         directly to those callbacks' `caller_context` parameter.
 ///
-/// \return ms8607_status : status of MS8607
-///       - ms8607_status_ok : I2C transfer completed successfully
-///       - ms8607_status_null_sensor : The pointer provided for the `sensor` parameter was NULL.
-///       - ms8607_status_callback_error : Error occurred within a ms8607_host_functions function
+/// \return ms5840_status : status of MS5840
+///       - ms5840_status_ok : I2C transfer completed successfully
+///       - ms5840_status_null_sensor : The pointer provided for the `sensor` parameter was NULL.
+///       - ms5840_status_callback_error : Error occurred within a ms5840_host_functions function
 ///
-enum ms8607_status ms8607_set_humidity_resolution(
-	ms8607_sensor                    *sensor,
-	enum ms8607_humidity_resolution  res,
+enum ms5840_status ms5840_set_humidity_resolution(
+	ms5840_sensor                    *sensor,
+	enum ms5840_humidity_resolution  res,
 	void                             *caller_context)
 {
 	if ( sensor == NULL )
-		return ms8607_status_null_sensor;
+		return ms5840_status_null_sensor;
 
-	enum ms8607_status status;
+	enum ms5840_status status;
 	uint8_t reg_value, tmp=0;
 	uint32_t conversion_time = HSENSOR_CONVERSION_TIME_12b;
 
-	if( res == ms8607_humidity_resolution_12b) {
+	if( res == ms5840_humidity_resolution_12b) {
 		tmp = HSENSOR_USER_REG_RESOLUTION_12b;
 		conversion_time = HSENSOR_CONVERSION_TIME_12b;
 	}
-	else if( res == ms8607_humidity_resolution_10b) {
+	else if( res == ms5840_humidity_resolution_10b) {
 		tmp = HSENSOR_USER_REG_RESOLUTION_10b;
 		conversion_time = HSENSOR_CONVERSION_TIME_10b;
 	}
-	else if( res == ms8607_humidity_resolution_8b) {
+	else if( res == ms5840_humidity_resolution_8b) {
 		tmp = HSENSOR_USER_REG_RESOLUTION_8b;
 		conversion_time = HSENSOR_CONVERSION_TIME_8b;
 	}
-	else if( res == ms8607_humidity_resolution_11b) {
+	else if( res == ms5840_humidity_resolution_11b) {
 		tmp = HSENSOR_USER_REG_RESOLUTION_11b;
 		conversion_time = HSENSOR_CONVERSION_TIME_11b;
 	}
 
-	status = ms8607_hsensor_read_user_register(sensor, &reg_value, caller_context);
-	if( status != ms8607_status_ok )
+	status = ms5840_hsensor_read_user_register(sensor, &reg_value, caller_context);
+	if( status != ms5840_status_ok )
 		return status;
 
 	// Clear the resolution bits
@@ -542,27 +542,27 @@ enum ms8607_status ms8607_set_humidity_resolution(
 
 /// \brief Set Humidity sensor ADC resolution.
 ///
-/// \param[in] ms8607_sensor *sensor : Object representing the sensor to set controller mode on.
-/// \param[in] ms8607_i2c_controller_mode : I2C mode
+/// \param[in] ms5840_sensor *sensor : Object representing the sensor to set controller mode on.
+/// \param[in] ms5840_i2c_controller_mode : I2C mode
 /// \param[in] void* caller_context : When this function calls any callbacks
-///         from the `ms8607_host_functions` structure, this will be passed
+///         from the `ms5840_host_functions` structure, this will be passed
 ///         directly to those callbacks' `caller_context` parameter.
 ///         (As of this writing, this function does not do any I2C I/O and
 ///         does not call any host functions, so `caller_context` is unused here,
 ///         but nonetheless provided for sake of future-proofing.)
 ///
-/// \return ms8607_status : status of MS8607
-///       - ms8607_status_ok
-///       - ms8607_status_null_sensor : The pointer provided for the `sensor` parameter was NULL.
+/// \return ms5840_status : status of MS5840
+///       - ms5840_status_ok
+///       - ms5840_status_null_sensor : The pointer provided for the `sensor` parameter was NULL.
 ///
-enum ms8607_status ms8607_set_humidity_i2c_controller_mode(ms8607_sensor *sensor,  enum ms8607_humidity_i2c_controller_mode mode, void *caller_context)
+enum ms5840_status ms5840_set_humidity_i2c_controller_mode(ms5840_sensor *sensor,  enum ms5840_humidity_i2c_controller_mode mode, void *caller_context)
 {
 	(void)caller_context;
 	if ( sensor == NULL )
-		return ms8607_status_null_sensor;
+		return ms5840_status_null_sensor;
 
 	sensor->hsensor_i2c_controller_mode = mode;
-	return ms8607_status_ok;
+	return ms5840_status_ok;
 }
 
 /// \brief    Reads the temperature, pressure and relative humidity values.
@@ -570,76 +570,76 @@ enum ms8607_status ms8607_set_humidity_i2c_controller_mode(ms8607_sensor *sensor
 /// \details  The results are returned in thousanths as a way to preserve
 ///           the sensor's resolution while using integer types.
 ///
-/// \param[in] ms8607_sensor* sensor : The sensor to use for measuring
+/// \param[in] ms5840_sensor* sensor : The sensor to use for measuring
 /// \param[out] int32_t* : Thousanths of degC temperature value
 /// \param[out] int32_t* : Microbar pressure value (thousanths of millibar)
 /// \param[out] int32_t* : Thousanths of %RH Relative Humidity value
 /// \param[in]  void* caller_context : When this function calls any callbacks
-///         from the `ms8607_host_functions` structure, this will be passed
+///         from the `ms5840_host_functions` structure, this will be passed
 ///         directly to those callbacks' `caller_context` parameter.
 ///
-/// \return ms8607_status : status of MS8607
-///       - ms8607_status_ok : I2C transfer completed successfully
-///       - ms8607_status_null_sensor : The pointer provided for the `new_sensor` parameter was NULL.
-///       - ms8607_status_null_argument : One or more of the `t`, `p`, or `h` pointers were NULL.
-///       - ms8607_status_callback_error : Error occurred within a ms8607_host_functions function
-///       - ms8607_status_eeprom_is_zero : One or more EEPROM coefficients were received as 0, preventing measurement.
-///       - ms8607_status_eeprom_crc_error : CRC check error on the sensor's EEPROM coefficients
-///       - ms8607_status_measurement_invalid : EEPROM is OK and I2C transfer completed, but data received was invalid
+/// \return ms5840_status : status of MS5840
+///       - ms5840_status_ok : I2C transfer completed successfully
+///       - ms5840_status_null_sensor : The pointer provided for the `new_sensor` parameter was NULL.
+///       - ms5840_status_null_argument : One or more of the `t`, `p`, or `h` pointers were NULL.
+///       - ms5840_status_callback_error : Error occurred within a ms5840_host_functions function
+///       - ms5840_status_eeprom_is_zero : One or more EEPROM coefficients were received as 0, preventing measurement.
+///       - ms5840_status_eeprom_crc_error : CRC check error on the sensor's EEPROM coefficients
+///       - ms5840_status_measurement_invalid : EEPROM is OK and I2C transfer completed, but data received was invalid
 ///
-enum ms8607_status ms8607_read_temperature_pressure_humidity_int32(ms8607_sensor *sensor, int32_t *t, int32_t *p, int32_t *h,  void* caller_context)
+enum ms5840_status ms5840_read_temperature_pressure_humidity_int32(ms5840_sensor *sensor, int32_t *t, int32_t *p, int32_t *h,  void* caller_context)
 {
 	if ( sensor == NULL )
-		return ms8607_status_null_sensor;
+		return ms5840_status_null_sensor;
 
 	if ( t == NULL || p == NULL || h == NULL )
-		return ms8607_status_null_argument;
+		return ms5840_status_null_argument;
 
-	enum ms8607_status status;
+	enum ms5840_status status;
 
 	status = psensor_read_pressure_and_temperature(sensor, t, p, caller_context);
-	if(status != ms8607_status_ok)
+	if(status != ms5840_status_ok)
 		return status;
 
 	status = hsensor_read_relative_humidity(sensor, h, caller_context);
-	if(status != ms8607_status_ok)
+	if(status != ms5840_status_ok)
 		return status;
 
-	return ms8607_status_ok;
+	return ms5840_status_ok;
 }
 
 /// \brief Reads the temperature, pressure and relative humidity values.
 ///
-/// \param[in] ms8607_sensor* sensor : The sensor to use for measuring
+/// \param[in] ms5840_sensor* sensor : The sensor to use for measuring
 /// \param[out] float* : degC temperature value
 /// \param[out] float* : mbar pressure value
 /// \param[out] float* : %RH Relative Humidity value
 /// \param[in]  void* caller_context : When this function calls any callbacks
-///         from the `ms8607_host_functions` structure, this will be passed
+///         from the `ms5840_host_functions` structure, this will be passed
 ///         directly to those callbacks' `caller_context` parameter.
 ///
-/// \return ms8607_status : status of MS8607
-///       - ms8607_status_ok : I2C transfer completed successfully
-///       - ms8607_status_null_sensor : The pointer provided for the `new_sensor` parameter was NULL.
-///       - ms8607_status_null_argument : One or more of the `t`, `p`, or `h` pointers were NULL.
-///       - ms8607_status_callback_error : Error occurred within a ms8607_host_functions function
-///       - ms8607_status_eeprom_is_zero : One or more EEPROM coefficients were received as 0, preventing measurement.
-///       - ms8607_status_eeprom_crc_error : CRC check error on the sensor's EEPROM coefficients
-///       - ms8607_status_measurement_invalid : EEPROM is OK and I2C transfer completed, but data received was invalid
+/// \return ms5840_status : status of MS5840
+///       - ms5840_status_ok : I2C transfer completed successfully
+///       - ms5840_status_null_sensor : The pointer provided for the `new_sensor` parameter was NULL.
+///       - ms5840_status_null_argument : One or more of the `t`, `p`, or `h` pointers were NULL.
+///       - ms5840_status_callback_error : Error occurred within a ms5840_host_functions function
+///       - ms5840_status_eeprom_is_zero : One or more EEPROM coefficients were received as 0, preventing measurement.
+///       - ms5840_status_eeprom_crc_error : CRC check error on the sensor's EEPROM coefficients
+///       - ms5840_status_measurement_invalid : EEPROM is OK and I2C transfer completed, but data received was invalid
 ///
-enum ms8607_status ms8607_read_temperature_pressure_humidity_float32(ms8607_sensor *sensor, float *t, float *p, float *h, void *caller_context)
+enum ms5840_status ms5840_read_temperature_pressure_humidity_float32(ms5840_sensor *sensor, float *t, float *p, float *h, void *caller_context)
 {
-	enum ms8607_status  status;
+	enum ms5840_status  status;
 	int32_t t_;
 	int32_t p_;
 	int32_t h_;
 
-	// NULL status of the `sensor` parameter will be checked by `ms8607_read_temperature_pressure_humidity_i32`.
+	// NULL status of the `sensor` parameter will be checked by `ms5840_read_temperature_pressure_humidity_i32`.
 
 	if ( t == NULL || p == NULL || h == NULL )
-		return ms8607_status_null_argument;
+		return ms5840_status_null_argument;
 
-	status = ms8607_read_temperature_pressure_humidity_int32(sensor, &t_, &p_, &h_, caller_context);
+	status = ms5840_read_temperature_pressure_humidity_int32(sensor, &t_, &p_, &h_, caller_context);
 	*t = ((float)t_) / 1000;
 	*p = ((float)p_) / 1000;
 	*h = ((float)h_) / 1000;
@@ -649,64 +649,64 @@ enum ms8607_status ms8607_read_temperature_pressure_humidity_float32(ms8607_sens
 
 /// \brief Provide battery status
 ///
-/// \param[in] ms8607_sensor *sensor : Object representing the sensor to get battery status from
-/// \param[out] ms8607_battery_status* : Battery status
-///                      - ms8607_battery_ok,
-///                      - ms8607_battery_low
+/// \param[in] ms5840_sensor *sensor : Object representing the sensor to get battery status from
+/// \param[out] ms5840_battery_status* : Battery status
+///                      - ms5840_battery_ok,
+///                      - ms5840_battery_low
 /// \param[in]  void* caller_context : When this function calls any callbacks
-///         from the `ms8607_host_functions` structure, this will be passed
+///         from the `ms5840_host_functions` structure, this will be passed
 ///         directly to those callbacks' `caller_context` parameter.
 ///
-/// \return ms8607_status : status of MS8607
-///       - ms8607_status_ok : I2C transfer completed successfully
-///       - ms8607_status_null_sensor : The pointer provided for the `new_sensor` parameter was NULL.
-///       - ms8607_status_callback_error : Error occurred within a ms8607_host_functions function
+/// \return ms5840_status : status of MS5840
+///       - ms5840_status_ok : I2C transfer completed successfully
+///       - ms5840_status_null_sensor : The pointer provided for the `new_sensor` parameter was NULL.
+///       - ms5840_status_callback_error : Error occurred within a ms5840_host_functions function
 ///
-enum ms8607_status ms8607_get_battery_status(ms8607_sensor *sensor, enum ms8607_battery_status *bat, void *caller_context)
+enum ms5840_status ms5840_get_battery_status(ms5840_sensor *sensor, enum ms5840_battery_status *bat, void *caller_context)
 {
 	if ( sensor == NULL )
-		return ms8607_status_null_sensor;
+		return ms5840_status_null_sensor;
 
 	if ( bat == NULL )
-		return ms8607_status_null_argument;
+		return ms5840_status_null_argument;
 
-	enum ms8607_status  status;
+	enum ms5840_status  status;
 	uint8_t reg_value;
 
-	status = ms8607_hsensor_read_user_register(sensor, &reg_value, caller_context);
-	if( status != ms8607_status_ok)
+	status = ms5840_hsensor_read_user_register(sensor, &reg_value, caller_context);
+	if( status != ms5840_status_ok)
 		return status;
 
 	if( reg_value & HSENSOR_USER_REG_END_OF_BATTERY_VDD_BELOW_2_25V )
-		*bat = ms8607_battery_low;
+		*bat = ms5840_battery_low;
 	else
-		*bat = ms8607_battery_ok;
+		*bat = ms5840_battery_ok;
 
 	return status;
 }
 
 /// \brief Enable heater
 ///
-/// \param[in] ms8607_sensor *sensor : Object representing the sensor whose heater shall be enabled
+/// \param[in] ms5840_sensor *sensor : Object representing the sensor whose heater shall be enabled
 /// \param[in] void* caller_context : When this function calls any callbacks
-///         from the `ms8607_host_functions` structure, this will be passed
+///         from the `ms5840_host_functions` structure, this will be passed
 ///         directly to those callbacks' `caller_context` parameter.
 ///
-/// \return ms8607_status : status of MS8607
-///       - ms8607_status_ok : I2C transfer completed successfully
-///       - ms8607_status_null_sensor : The pointer provided for the `new_sensor` parameter was NULL.
-///       - ms8607_status_callback_error : Error occurred within a ms8607_host_functions function
+/// \return ms5840_status : status of MS5840
+///       - ms5840_status_ok : I2C transfer completed successfully
+///       - ms5840_status_null_sensor : The pointer provided for the `new_sensor` parameter was NULL.
+///       - ms5840_status_callback_error : Error occurred within a ms5840_host_functions function
 ///
-enum ms8607_status ms8607_enable_heater(ms8607_sensor *sensor, void* caller_context)
+enum ms5840_status ms5840_enable_heater(ms5840_sensor *sensor, void* caller_context)
 {
 	if ( sensor == NULL )
-		return ms8607_status_null_sensor;
+		return ms5840_status_null_sensor;
 
-	enum ms8607_status status;
+	enum ms5840_status status;
 	uint8_t reg_value;
 
-	status = ms8607_hsensor_read_user_register(sensor, &reg_value, caller_context);
-	if( status != ms8607_status_ok )
+	status = ms5840_hsensor_read_user_register(sensor, &reg_value, caller_context);
+	if( status != ms5840_status_ok )
 		return status;
 
 	// Clear the resolution bits
@@ -718,26 +718,26 @@ enum ms8607_status ms8607_enable_heater(ms8607_sensor *sensor, void* caller_cont
 
 /// \brief Disable heater
 ///
-/// \param[in] ms8607_sensor *sensor : Object representing the sensor whose heater shall be disabled
+/// \param[in] ms5840_sensor *sensor : Object representing the sensor whose heater shall be disabled
 /// \param[in] void* caller_context : When this function calls any callbacks
-///         from the `ms8607_host_functions` structure, this will be passed
+///         from the `ms5840_host_functions` structure, this will be passed
 ///         directly to those callbacks' `caller_context` parameter.
 ///
-/// \return ms8607_status : status of MS8607
-///       - ms8607_status_ok : I2C transfer completed successfully
-///       - ms8607_status_null_sensor : The pointer provided for the `new_sensor` parameter was NULL.
-///       - ms8607_status_callback_error : Error occurred within a ms8607_host_functions function
+/// \return ms5840_status : status of MS5840
+///       - ms5840_status_ok : I2C transfer completed successfully
+///       - ms5840_status_null_sensor : The pointer provided for the `new_sensor` parameter was NULL.
+///       - ms5840_status_callback_error : Error occurred within a ms5840_host_functions function
 ///
-enum ms8607_status ms8607_disable_heater(ms8607_sensor *sensor, void* caller_context)
+enum ms5840_status ms5840_disable_heater(ms5840_sensor *sensor, void* caller_context)
 {
 	if ( sensor == NULL )
-		return ms8607_status_null_sensor;
+		return ms5840_status_null_sensor;
 
-	enum ms8607_status status;
+	enum ms5840_status status;
 	uint8_t reg_value;
 
-	status = ms8607_hsensor_read_user_register(sensor, &reg_value, caller_context);
-	if( status != ms8607_status_ok )
+	status = ms5840_hsensor_read_user_register(sensor, &reg_value, caller_context);
+	if( status != ms5840_status_ok )
 		return status;
 
 	// Clear the resolution bits
@@ -749,36 +749,36 @@ enum ms8607_status ms8607_disable_heater(ms8607_sensor *sensor, void* caller_con
 
 /// \brief Get heater status
 ///
-/// \param[in] ms8607_sensor *sensor : Object representing the sensor  to get heater status from
-/// \param[in] ms8607_heater_status* : Return heater status (above or below 2.5V)
-///                      - ms8607_heater_off,
-///                      - ms8607_heater_on
+/// \param[in] ms5840_sensor *sensor : Object representing the sensor  to get heater status from
+/// \param[in] ms5840_heater_status* : Return heater status (above or below 2.5V)
+///                      - ms5840_heater_off,
+///                      - ms5840_heater_on
 /// \param[in] void* caller_context : When this function calls any callbacks
-///         from the `ms8607_host_functions` structure, this will be passed
+///         from the `ms5840_host_functions` structure, this will be passed
 ///         directly to those callbacks' `caller_context` parameter.
 ///
-/// \return ms8607_status : status of MS8607
-///       - ms8607_status_ok : I2C transfer completed successfully
-///       - ms8607_status_null_sensor : The pointer provided for the `new_sensor` parameter was NULL.
-///       - ms8607_status_callback_error : Error occurred within a ms8607_host_functions function
+/// \return ms5840_status : status of MS5840
+///       - ms5840_status_ok : I2C transfer completed successfully
+///       - ms5840_status_null_sensor : The pointer provided for the `new_sensor` parameter was NULL.
+///       - ms5840_status_callback_error : Error occurred within a ms5840_host_functions function
 ///
-enum ms8607_status ms8607_get_heater_status(ms8607_sensor *sensor, enum ms8607_heater_status *heater, void* caller_context)
+enum ms5840_status ms5840_get_heater_status(ms5840_sensor *sensor, enum ms5840_heater_status *heater, void* caller_context)
 {
 	if ( sensor == NULL )
-		return ms8607_status_null_sensor;
+		return ms5840_status_null_sensor;
 
-	enum ms8607_status status;
+	enum ms5840_status status;
 	uint8_t reg_value;
 
-	status = ms8607_hsensor_read_user_register(sensor, &reg_value, caller_context);
-	if( status != ms8607_status_ok )
+	status = ms5840_hsensor_read_user_register(sensor, &reg_value, caller_context);
+	if( status != ms5840_status_ok )
 		return status;
 
 	// Get the heater enable bit in reg_value
 	if( reg_value & HSENSOR_USER_REG_ONCHIP_HEATER_ENABLE)
-		*heater = ms8607_heater_on;
+		*heater = ms5840_heater_on;
 	else
-		*heater = ms8607_heater_off;
+		*heater = ms5840_heater_off;
 
 	return status;
 }
@@ -787,29 +787,29 @@ enum ms8607_status ms8607_get_heater_status(ms8607_sensor *sensor, enum ms8607_h
 
 /// \brief Check whether humidity sensor is connected
 ///
-/// \param[in] ms8607_sensor *sensor : Object representing the sensor to check for connectivity
+/// \param[in] ms5840_sensor *sensor : Object representing the sensor to check for connectivity
 /// \param[in] void* caller_context : When this function calls any callbacks
-///         from the `ms8607_host_functions` structure, this will be passed
+///         from the `ms5840_host_functions` structure, this will be passed
 ///         directly to those callbacks' `caller_context` parameter.
 ///
 /// \return bool : status of humidity sensor
 ///       - true : Device is present
 ///       - false : Device is not acknowledging I2C address
 ///
-static bool hsensor_is_connected(ms8607_sensor *sensor, void* caller_context)
+static bool hsensor_is_connected(ms5840_sensor *sensor, void* caller_context)
 {
 	assert( sensor != NULL );
 
-	enum ms8607_status status;
+	enum ms5840_status status;
 
-	ms8607_i2c_controller_packet transfer = {
+	ms5840_i2c_controller_packet transfer = {
 		.address     = HSENSOR_ADDR,
 		.data_length = 0,
 		.data        = NULL,
 	};
 	/* Do the transfer */
 	status = sensor->host_funcs->i2c_controller_write(caller_context, &transfer);
-	if( status != ms8607_status_ok)
+	if( status != ms5840_status_ok)
 		return false;
 
 	return true;
@@ -817,41 +817,41 @@ static bool hsensor_is_connected(ms8607_sensor *sensor, void* caller_context)
 
 /// \brief Reset the humidity sensor part
 ///
-/// \param[in] ms8607_sensor *sensor : Object representing the sensor to reset
+/// \param[in] ms5840_sensor *sensor : Object representing the sensor to reset
 /// \param[in] void* caller_context : When this function calls any callbacks
-///         from the `ms8607_host_functions` structure, this will be passed
+///         from the `ms5840_host_functions` structure, this will be passed
 ///         directly to those callbacks' `caller_context` parameter.
 ///
-/// \return ms8607_status : status of MS8607
-///       - ms8607_status_ok : I2C transfer completed successfully
-///       - ms8607_status_callback_error : Error occurred within a ms8607_host_functions function
+/// \return ms5840_status : status of MS5840
+///       - ms5840_status_ok : I2C transfer completed successfully
+///       - ms5840_status_callback_error : Error occurred within a ms5840_host_functions function
 ///
-static enum ms8607_status  hsensor_reset(ms8607_sensor *sensor, void* caller_context)
+static enum ms5840_status  hsensor_reset(ms5840_sensor *sensor, void* caller_context)
 {
 	assert( sensor != NULL );
 
-	enum ms8607_status status;
+	enum ms5840_status status;
 
 	status = hsensor_write_command(sensor, HSENSOR_RESET_COMMAND, caller_context);
-	if( status != ms8607_status_ok )
+	if( status != ms5840_status_ok )
 		return status;
 
 	sensor->hsensor_conversion_time = HSENSOR_CONVERSION_TIME_12b;
 	sensor->host_funcs->sleep_ms(caller_context, HSENSOR_RESET_TIME);
 
-	return ms8607_status_ok;
+	return ms5840_status_ok;
 }
 
 /// \brief Writes the Humidity sensor 8-bits command with the value passed
 ///
 /// \param[in] uint8_t : Command value to be written.
 ///
-/// \return ms8607_status : status of MS8607
-///       - ms8607_status_ok : I2C transfer completed successfully
-///       - ms8607_status_null_sensor : The pointer provided for the `new_sensor` parameter was NULL.
-///       - ms8607_status_callback_error : Error occurred within a ms8607_host_functions function
+/// \return ms5840_status : status of MS5840
+///       - ms5840_status_ok : I2C transfer completed successfully
+///       - ms5840_status_null_sensor : The pointer provided for the `new_sensor` parameter was NULL.
+///       - ms5840_status_callback_error : Error occurred within a ms5840_host_functions function
 ///
-static enum ms8607_status hsensor_write_command(ms8607_sensor *sensor, uint8_t cmd, void *caller_context)
+static enum ms5840_status hsensor_write_command(ms5840_sensor *sensor, uint8_t cmd, void *caller_context)
 {
 	assert( sensor != NULL );
 
@@ -859,7 +859,7 @@ static enum ms8607_status hsensor_write_command(ms8607_sensor *sensor, uint8_t c
 
 	data[0] = cmd;
 
-	ms8607_i2c_controller_packet transfer = {
+	ms5840_i2c_controller_packet transfer = {
 		.address     = HSENSOR_ADDR,
 		.data_length = 1,
 		.data        = data,
@@ -874,12 +874,12 @@ static enum ms8607_status hsensor_write_command(ms8607_sensor *sensor, uint8_t c
 ///
 /// \param[in] uint8_t : Command value to be written.
 ///
-/// \return ms8607_status : status of MS8607
-///       - ms8607_status_ok : I2C transfer completed successfully
-///       - ms8607_status_null_sensor : The pointer provided for the `new_sensor` parameter was NULL.
-///       - ms8607_status_callback_error : Error occurred within a ms8607_host_functions function
+/// \return ms5840_status : status of MS5840
+///       - ms5840_status_ok : I2C transfer completed successfully
+///       - ms5840_status_null_sensor : The pointer provided for the `new_sensor` parameter was NULL.
+///       - ms5840_status_callback_error : Error occurred within a ms5840_host_functions function
 ///
-enum ms8607_status hsensor_write_command_no_stop(ms8607_sensor *sensor, uint8_t cmd, void *caller_context)
+enum ms5840_status hsensor_write_command_no_stop(ms5840_sensor *sensor, uint8_t cmd, void *caller_context)
 {
 	assert( sensor != NULL );
 
@@ -887,7 +887,7 @@ enum ms8607_status hsensor_write_command_no_stop(ms8607_sensor *sensor, uint8_t 
 
 	data[0] = cmd;
 
-	ms8607_i2c_controller_packet transfer = {
+	ms5840_i2c_controller_packet transfer = {
 		.address     = HSENSOR_ADDR,
 		.data_length = 1,
 		.data        = data,
@@ -902,11 +902,11 @@ enum ms8607_status hsensor_write_command_no_stop(ms8607_sensor *sensor, uint8_t 
 /// \param[in] uint16_t : variable on which to check CRC
 /// \param[in] uint8_t : CRC value
 ///
-/// \return ms8607_status : status of MS8607
-///       - ms8607_status_ok : CRC check is OK
-///       - ms8607_status_measurement_invalid : CRC check error
+/// \return ms5840_status : status of MS5840
+///       - ms5840_status_ok : CRC check is OK
+///       - ms5840_status_measurement_invalid : CRC check error
 ///
-static enum ms8607_status hsensor_crc_check( uint16_t value, uint8_t crc)
+static enum ms5840_status hsensor_crc_check( uint16_t value, uint8_t crc)
 {
 	uint32_t polynom = 0x988000; // x^8 + x^5 + x^4 + 1
 	uint32_t msb     = 0x800000;
@@ -925,39 +925,39 @@ static enum ms8607_status hsensor_crc_check( uint16_t value, uint8_t crc)
 		polynom >>=1;
 	}
 	if( result == crc )
-		return ms8607_status_ok;
+		return ms5840_status_ok;
 	else
-		return ms8607_status_measurement_invalid;
+		return ms5840_status_measurement_invalid;
 }
 
-/// \brief   Reads the MS8607 humidity user register.
+/// \brief   Reads the MS5840 humidity user register.
 ///
 /// \details The "user" register is described in the datasheet.
-///          It is unnecessary to call this function to use the ms8607 sensor,
+///          It is unnecessary to call this function to use the ms5840 sensor,
 ///          but it could be useful as a diagnostic tool or for better
-///          understanding the behavior of the ms8607.
+///          understanding the behavior of the ms5840.
 ///
-/// \param[in] ms8607_sensor *sensor : Object representing the sensor to read the user register from
+/// \param[in] ms5840_sensor *sensor : Object representing the sensor to read the user register from
 /// \param[out] uint8_t* : Storage of user register value
 /// \param[in] void* caller_context : When this function calls any callbacks
-///         from the `ms8607_host_functions` structure, this will be passed
+///         from the `ms5840_host_functions` structure, this will be passed
 ///         directly to those callbacks' `caller_context` parameter.
 ///
-/// \return ms8607_status : status of MS8607
-///       - ms8607_status_ok : I2C transfer completed successfully
-///       - ms8607_status_null_sensor : The pointer provided for the `new_sensor` parameter was NULL.
-///       - ms8607_status_callback_error : Error occurred within a ms8607_host_functions function
-enum ms8607_status ms8607_hsensor_read_user_register(ms8607_sensor *sensor, uint8_t *value, void *caller_context)
+/// \return ms5840_status : status of MS5840
+///       - ms5840_status_ok : I2C transfer completed successfully
+///       - ms5840_status_null_sensor : The pointer provided for the `new_sensor` parameter was NULL.
+///       - ms5840_status_callback_error : Error occurred within a ms5840_host_functions function
+enum ms5840_status ms5840_hsensor_read_user_register(ms5840_sensor *sensor, uint8_t *value, void *caller_context)
 {
 	assert( sensor != NULL );
 	assert( value != NULL );
 
-	enum ms8607_status status;
+	enum ms5840_status status;
 	uint8_t buffer[1];
 	buffer[0] = 0;
 
 	/* Read data */
-	ms8607_i2c_controller_packet read_transfer = {
+	ms5840_i2c_controller_packet read_transfer = {
 		.address     = HSENSOR_ADDR,
 		.data_length = 1,
 		.data        = buffer,
@@ -965,41 +965,41 @@ enum ms8607_status ms8607_hsensor_read_user_register(ms8607_sensor *sensor, uint
 
 	// Send the Read Register Command
 	status = hsensor_write_command(sensor, HSENSOR_READ_USER_REG_COMMAND, caller_context);
-	if( status != ms8607_status_ok )
+	if( status != ms5840_status_ok )
 		return status;
 
 	status = sensor->host_funcs->i2c_controller_read(caller_context, &read_transfer);
-	if ( status != ms8607_status_ok )
+	if ( status != ms5840_status_ok )
 		return status;
 
 	*value = buffer[0];
 
-	return ms8607_status_ok;
+	return ms5840_status_ok;
 }
 
-/// \brief Writes the MS8607 humidity user register with value
+/// \brief Writes the MS5840 humidity user register with value
 ///        Will read and keep the unreserved bits of the register
 ///
-/// \param[in] ms8607_sensor *sensor : Object representing the sensor to write to
+/// \param[in] ms5840_sensor *sensor : Object representing the sensor to write to
 /// \param[in] uint8_t : Register value to be set.
 /// \param[in] void* caller_context : When this function calls any callbacks
-///         from the `ms8607_host_functions` structure, this will be passed
+///         from the `ms5840_host_functions` structure, this will be passed
 ///         directly to those callbacks' `caller_context` parameter.
 ///
-/// \return ms8607_status : status of MS8607
-///       - ms8607_status_ok : I2C transfer completed successfully
-///       - ms8607_status_callback_error : Error occurred within a ms8607_host_functions function
+/// \return ms5840_status : status of MS5840
+///       - ms5840_status_ok : I2C transfer completed successfully
+///       - ms5840_status_callback_error : Error occurred within a ms5840_host_functions function
 ///
-static enum ms8607_status hsensor_write_user_register(ms8607_sensor *sensor, uint8_t value, void *caller_context)
+static enum ms5840_status hsensor_write_user_register(ms5840_sensor *sensor, uint8_t value, void *caller_context)
 {
 	assert( sensor != NULL );
 
-	enum ms8607_status status;
+	enum ms5840_status status;
 	uint8_t reg;
 	uint8_t data[2];
 
-	status = ms8607_hsensor_read_user_register(sensor, &reg, caller_context);
-	if( status != ms8607_status_ok )
+	status = ms5840_hsensor_read_user_register(sensor, &reg, caller_context);
+	if( status != ms5840_status_ok )
 		return status;
 
 	// Clear bits of reg that are not reserved
@@ -1010,7 +1010,7 @@ static enum ms8607_status hsensor_write_user_register(ms8607_sensor *sensor, uin
 	data[0] = HSENSOR_WRITE_USER_REG_COMMAND;
 	data[1] = reg;
 
-	ms8607_i2c_controller_packet transfer = {
+	ms5840_i2c_controller_packet transfer = {
 		.address     = HSENSOR_ADDR,
 		.data_length = 2,
 		.data        = data,
@@ -1022,23 +1022,23 @@ static enum ms8607_status hsensor_write_user_register(ms8607_sensor *sensor, uin
 
 /// \brief Reads the relative humidity ADC value
 ///
-/// \param[in] ms8607_sensor *sensor : Object representing the sensor to read the adc from
+/// \param[in] ms5840_sensor *sensor : Object representing the sensor to read the adc from
 /// \param[out] uint16_t* : Relative humidity ADC value.
 /// \param[in] void* caller_context : When this function calls any callbacks
-///         from the `ms8607_host_functions` structure, this will be passed
+///         from the `ms5840_host_functions` structure, this will be passed
 ///         directly to those callbacks' `caller_context` parameter.
 ///
-/// \return ms8607_status : status of MS8607
-///       - ms8607_status_ok : I2C transfer completed successfully
-///       - ms8607_status_callback_error : Error occurred within a ms8607_host_functions function
-///       - ms8607_status_measurement_invalid : EEPROM is OK and I2C transfer completed, but data received was invalid
+/// \return ms5840_status : status of MS5840
+///       - ms5840_status_ok : I2C transfer completed successfully
+///       - ms5840_status_callback_error : Error occurred within a ms5840_host_functions function
+///       - ms5840_status_measurement_invalid : EEPROM is OK and I2C transfer completed, but data received was invalid
 ///
-static enum ms8607_status hsensor_humidity_conversion_and_read_adc(ms8607_sensor *sensor, uint16_t *adc, void *caller_context)
+static enum ms5840_status hsensor_humidity_conversion_and_read_adc(ms5840_sensor *sensor, uint16_t *adc, void *caller_context)
 {
 	assert( sensor != NULL );
 	assert( adc != NULL );
 
-	enum ms8607_status status = ms8607_status_ok;
+	enum ms5840_status status = ms5840_status_ok;
 	uint16_t _adc;
 	uint8_t buffer[3];
 	uint8_t crc;
@@ -1048,7 +1048,7 @@ static enum ms8607_status hsensor_humidity_conversion_and_read_adc(ms8607_sensor
 	buffer[2] = 0;
 
 	/* Read data */
-    ms8607_i2c_controller_packet read_transfer = {
+    ms5840_i2c_controller_packet read_transfer = {
 		.address     = HSENSOR_ADDR,
 		.data_length = 3,
 		.data        = buffer,
@@ -1070,18 +1070,18 @@ static enum ms8607_status hsensor_humidity_conversion_and_read_adc(ms8607_sensor
 	// the delay. TODO: If I implement this, make sure to NOT recommend
 	// that the user put in their own stubs for the dependencies. That would
 	// defeat the capability-detection mechanism!
-	if( sensor->hsensor_i2c_controller_mode == ms8607_i2c_hold) {
+	if( sensor->hsensor_i2c_controller_mode == ms5840_i2c_hold) {
 		status = hsensor_write_command_no_stop(sensor, HSENSOR_READ_HUMIDITY_W_HOLD_COMMAND, caller_context);
-		if( status != ms8607_status_ok)
+		if( status != ms5840_status_ok)
 			return status;
 
 		status = sensor->host_funcs->i2c_controller_read(caller_context, &read_transfer);
-		if( status != ms8607_status_ok)
+		if( status != ms5840_status_ok)
 			return status;
 	}
 	else {
 		status = hsensor_write_command(sensor, HSENSOR_READ_HUMIDITY_WO_HOLD_COMMAND, caller_context);
-		if( status != ms8607_status_ok)
+		if( status != ms5840_status_ok)
 			return status;
 
 
@@ -1091,13 +1091,13 @@ static enum ms8607_status hsensor_humidity_conversion_and_read_adc(ms8607_sensor
 		while (true)
 		{
 			status = sensor->host_funcs->i2c_controller_read(caller_context, &read_transfer);
-			if ( status == ms8607_status_callback_i2c_nack )
+			if ( status == ms5840_status_callback_i2c_nack )
 				continue; // Not ready yet. That's OK, just wait longer. TODO: Timeout calculations?
 			else
-			if ( status == ms8607_status_ok )
+			if ( status == ms5840_status_ok )
 				break;
 			else
-			// if( status != ms8607_status_ok)
+			// if( status != ms5840_status_ok)
 				return status; // Other errors indicate something is *actually* wrong.
 		}
 	}
@@ -1106,10 +1106,10 @@ static enum ms8607_status hsensor_humidity_conversion_and_read_adc(ms8607_sensor
 	crc = buffer[2];
 
 	// Compute CRC
-	// This is where we can get the `ms8607_status_measurement_invalid` error.
+	// This is where we can get the `ms5840_status_measurement_invalid` error.
 	// Notably, this is not EEPROM/coefficient related. We're checking the CRC of the measurement itself.
 	status = hsensor_crc_check(_adc,crc);
-	if( status != ms8607_status_ok)
+	if( status != ms5840_status_ok)
 		return status;
 
 	*adc = _adc;
@@ -1119,27 +1119,27 @@ static enum ms8607_status hsensor_humidity_conversion_and_read_adc(ms8607_sensor
 
 /// \brief Reads the relative humidity value.
 ///
-/// \param[in] ms8607_sensor *sensor : Object representing the sensor to read relative humidity from
+/// \param[in] ms5840_sensor *sensor : Object representing the sensor to read relative humidity from
 /// \param[out] int32_t* : %RH Relative Humidity value
 /// \param[in] void* caller_context : When this function calls any callbacks
-///         from the `ms8607_host_functions` structure, this will be passed
+///         from the `ms5840_host_functions` structure, this will be passed
 ///         directly to those callbacks' `caller_context` parameter.
 ///
-/// \return ms8607_status : status of MS8607
-///       - ms8607_status_ok : I2C transfer completed successfully
-///       - ms8607_status_callback_error : Error occurred within a ms8607_host_functions function
-///       - ms8607_status_measurement_invalid : EEPROM is OK and I2C transfer completed, but data received was invalid
+/// \return ms5840_status : status of MS5840
+///       - ms5840_status_ok : I2C transfer completed successfully
+///       - ms5840_status_callback_error : Error occurred within a ms5840_host_functions function
+///       - ms5840_status_measurement_invalid : EEPROM is OK and I2C transfer completed, but data received was invalid
 ///
-static enum ms8607_status hsensor_read_relative_humidity(ms8607_sensor *sensor, int32_t *humidity, void *caller_context)
+static enum ms5840_status hsensor_read_relative_humidity(ms5840_sensor *sensor, int32_t *humidity, void *caller_context)
 {
 	assert( sensor != NULL );
 	assert( humidity != NULL );
 
-	enum ms8607_status  status;
+	enum ms5840_status  status;
 	uint16_t adc;
 
 	status = hsensor_humidity_conversion_and_read_adc(sensor, &adc, caller_context);
-	if( status != ms8607_status_ok)
+	if( status != ms5840_status_ok)
 		return status;
 
 	// Perform conversion function
@@ -1151,12 +1151,12 @@ static enum ms8607_status hsensor_read_relative_humidity(ms8607_sensor *sensor, 
 
 #if 0
 // TODO: remove?
-/*static*/ enum ms8607_status hsensor_poll_relative_humidity(ms8607_sensor *sensor, float *humidity, void *caller_context)
+/*static*/ enum ms5840_status hsensor_poll_relative_humidity(ms5840_sensor *sensor, float *humidity, void *caller_context)
 {
 	assert( sensor != NULL );
 	assert( humidity != NULL );
 
-	enum ms8607_status  status;
+	enum ms5840_status  status;
 	uint16_t adc;
 	uint8_t buffer[3];
 	uint8_t crc;
@@ -1166,7 +1166,7 @@ static enum ms8607_status hsensor_read_relative_humidity(ms8607_sensor *sensor, 
 	buffer[2] = 0;
 
 	/* Read data */
-    ms8607_i2c_controller_packet read_transfer = {
+    ms5840_i2c_controller_packet read_transfer = {
 		.address     = HSENSOR_ADDR,
 		.data_length = 3,
 		.data        = buffer,
@@ -1175,20 +1175,20 @@ static enum ms8607_status hsensor_read_relative_humidity(ms8607_sensor *sensor, 
 	// TODO: Move success-path stuff into separate function.
 	// This would allow the compiler to optimize inlining/etc for i-cache salvation.
 	status = sensor->host_funcs->i2c_controller_read(caller_context, &read_transfer);
-	if ( status == ms8607_status_callback_i2c_nack )
-		return ms8607_status_waiting; // Not ready yet. That's OK, just wait longer. TODO: Timeout calculations?
+	if ( status == ms5840_status_callback_i2c_nack )
+		return ms5840_status_waiting; // Not ready yet. That's OK, just wait longer. TODO: Timeout calculations?
 	else
-	if( status != ms8607_status_ok)
+	if( status != ms5840_status_ok)
 		return status; // Other errors indicate something is *actually* wrong.
 
 	adc = (buffer[0] << 8) | buffer[1];
 	crc = buffer[2];
 
 	// Compute CRC
-	// This is where we can get the `ms8607_status_measurement_invalid` error.
+	// This is where we can get the `ms5840_status_measurement_invalid` error.
 	// Notably, this is not EEPROM/coefficient related. We're checking the CRC of the measurement itself.
 	status = hsensor_crc_check(adc,crc);
-	if( status != ms8607_status_ok)
+	if( status != ms5840_status_ok)
 		return status;
 
 	// Perform conversion function
@@ -1201,95 +1201,95 @@ static enum ms8607_status hsensor_read_relative_humidity(ms8607_sensor *sensor, 
 /// \brief Returns result of compensated humidity
 ///        Note : This function shall only be used when the heater is OFF. It will return an error otherwise.
 ///
-/// \param[in] ms8607_sensor *sensor : Object representing the sensor that earlier obtained the temperature and uncompensated %RH
+/// \param[in] ms5840_sensor *sensor : Object representing the sensor that earlier obtained the temperature and uncompensated %RH
 /// \param[in] float - Actual temperature measured (degC)
 /// \param[in] float - Actual relative humidity measured (%RH)
 /// \param[out] float *- Compensated humidity (%RH).
 /// \param[in] void* caller_context : When this function calls any callbacks
-///         from the `ms8607_host_functions` structure, this will be passed
+///         from the `ms5840_host_functions` structure, this will be passed
 ///         directly to those callbacks' `caller_context` parameter.
 ///
-/// \return ms8607_status : status of MS8607
-///       - ms8607_status_ok : I2C transfer completed successfully
-///       - ms8607_status_null_sensor : The pointer provided for the `new_sensor` parameter was NULL.
-///       - ms8607_status_heater_on_error : Cannot compute compensated humidity because heater is on
+/// \return ms5840_status : status of MS5840
+///       - ms5840_status_ok : I2C transfer completed successfully
+///       - ms5840_status_null_sensor : The pointer provided for the `new_sensor` parameter was NULL.
+///       - ms5840_status_heater_on_error : Cannot compute compensated humidity because heater is on
 ///
-enum ms8607_status ms8607_get_compensated_humidity(ms8607_sensor *sensor, float temperature, float relative_humidity, float *compensated_humidity)
+enum ms5840_status ms5840_get_compensated_humidity(ms5840_sensor *sensor, float temperature, float relative_humidity, float *compensated_humidity)
 {
 	if ( sensor == NULL )
-		return ms8607_status_null_sensor;
+		return ms5840_status_null_sensor;
 
 	if ( compensated_humidity == NULL )
-		return ms8607_status_null_argument;
+		return ms5840_status_null_argument;
 
 	if( sensor->hsensor_heater_on )
-		return ms8607_status_heater_on_error;
+		return ms5840_status_heater_on_error;
 
 	*compensated_humidity = ( relative_humidity + (25 - temperature) * HSENSOR_TEMPERATURE_COEFFICIENT);
 
-	return ms8607_status_ok;
+	return ms5840_status_ok;
 }
 
 /// \brief Returns the computed dew point
 ///        Note : This function shall only be used when the heater is OFF. It will return an error otherwise.
 ///
-/// \param[in] ms8607_sensor *sensor : Object representing the sensor that earlier obtained the temperature and uncompensated %RH
+/// \param[in] ms5840_sensor *sensor : Object representing the sensor that earlier obtained the temperature and uncompensated %RH
 /// \param[in] float - Actual temperature measured (degC)
 /// \param[in] float - Actual relative humidity measured (%RH)
 /// \param[out] float *- Dew point temperature (DegC).
 /// \param[in] void* caller_context : When this function calls any callbacks
-///         from the `ms8607_host_functions` structure, this will be passed
+///         from the `ms5840_host_functions` structure, this will be passed
 ///         directly to those callbacks' `caller_context` parameter.
 ///
-/// \return ms8607_status : status of MS8607
-///       - ms8607_status_ok : I2C transfer completed successfully
-///       - ms8607_status_null_sensor : The pointer provided for the `new_sensor` parameter was NULL.
-///       - ms8607_status_heater_on_error : Cannot compute compensated humidity because heater is on
+/// \return ms5840_status : status of MS5840
+///       - ms5840_status_ok : I2C transfer completed successfully
+///       - ms5840_status_null_sensor : The pointer provided for the `new_sensor` parameter was NULL.
+///       - ms5840_status_heater_on_error : Cannot compute compensated humidity because heater is on
 ///
-enum ms8607_status  ms8607_get_dew_point(ms8607_sensor *sensor, float temperature, float relative_humidity, float *dew_point)
+enum ms5840_status  ms5840_get_dew_point(ms5840_sensor *sensor, float temperature, float relative_humidity, float *dew_point)
 {
 	if ( sensor == NULL )
-		return ms8607_status_null_sensor;
+		return ms5840_status_null_sensor;
 
 	if ( dew_point == NULL )
-		return ms8607_status_null_argument;
+		return ms5840_status_null_argument;
 
 	double partial_pressure;
 
 	if( sensor->hsensor_heater_on )
-		return ms8607_status_heater_on_error;
+		return ms5840_status_heater_on_error;
 
 	// Missing power of 10
 	partial_pressure = pow( 10, HSENSOR_CONSTANT_A - HSENSOR_CONSTANT_B / (temperature + HSENSOR_CONSTANT_C) );
 
 	*dew_point =  - HSENSOR_CONSTANT_B / (log10( relative_humidity * partial_pressure / 100) - HSENSOR_CONSTANT_A) - HSENSOR_CONSTANT_C;
 
-	return ms8607_status_ok;
+	return ms5840_status_ok;
 }
 
 /******************** Functions from Pressure sensor ********************/
 
 /// \brief Check whether Pressure sensor device is connected
 ///
-/// \param[in] ms8607_sensor *sensor : Object representing the sensor to check for connectivity
+/// \param[in] ms5840_sensor *sensor : Object representing the sensor to check for connectivity
 /// \param[in] void* caller_context : When this function calls any callbacks
-///         from the `ms8607_host_functions` structure, this will be passed
+///         from the `ms5840_host_functions` structure, this will be passed
 ///         directly to those callbacks' `caller_context` parameter.
 /// \param[in] void* caller_context : When this function calls any callbacks
-///         from the `ms8607_host_functions` structure, this will be passed
+///         from the `ms5840_host_functions` structure, this will be passed
 ///         directly to those callbacks' `caller_context` parameter.
 ///
 /// \return bool : status of Pressure sensor
 ///       - true : Device is present
 ///       - false : Device is not acknowledging I2C address
 ///
-static bool psensor_is_connected(ms8607_sensor *sensor, void* caller_context)
+static bool psensor_is_connected(ms5840_sensor *sensor, void* caller_context)
 {
 	assert( sensor != NULL );
 
-	enum ms8607_status status;
+	enum ms5840_status status;
 
-	ms8607_i2c_controller_packet transfer = {
+	ms5840_i2c_controller_packet transfer = {
 		.address     = PSENSOR_ADDR,
 		.data_length = 0,
 		.data        = NULL,
@@ -1297,7 +1297,7 @@ static bool psensor_is_connected(ms8607_sensor *sensor, void* caller_context)
 
 	/* Do the transfer */
 	status = sensor->host_funcs->i2c_controller_write(caller_context, &transfer);
-	if( status != ms8607_status_ok)
+	if( status != ms5840_status_ok)
 		return false;
 
 	return true;
@@ -1305,16 +1305,16 @@ static bool psensor_is_connected(ms8607_sensor *sensor, void* caller_context)
 
 /// \brief Reset the Pressure sensor part
 ///
-/// \param[in] ms8607_sensor *sensor : Object representing the sensor to reset
+/// \param[in] ms5840_sensor *sensor : Object representing the sensor to reset
 /// \param[in] void* caller_context : When this function calls any callbacks
-///         from the `ms8607_host_functions` structure, this will be passed
+///         from the `ms5840_host_functions` structure, this will be passed
 ///         directly to those callbacks' `caller_context` parameter.
 ///
-/// \return ms8607_status : status of MS8607
-///       - ms8607_status_ok : I2C transfer completed successfully
-///       - ms8607_status_callback_error : Error occurred within a ms8607_host_functions function
+/// \return ms5840_status : status of MS5840
+///       - ms5840_status_ok : I2C transfer completed successfully
+///       - ms5840_status_callback_error : Error occurred within a ms5840_host_functions function
 ///
-static enum ms8607_status  psensor_reset(ms8607_sensor *sensor, void *caller_context)
+static enum ms5840_status  psensor_reset(ms5840_sensor *sensor, void *caller_context)
 {
 	assert( sensor != NULL );
 	return psensor_write_command(sensor, PSENSOR_RESET_COMMAND, caller_context);
@@ -1323,24 +1323,24 @@ static enum ms8607_status  psensor_reset(ms8607_sensor *sensor, void *caller_con
 ///
 /// \brief Writes the Pressure Sensor 8-bits command with the value passed
 ///
-/// \param[in] ms8607_sensor *sensor : Object representing the sensor to send the command to
+/// \param[in] ms5840_sensor *sensor : Object representing the sensor to send the command to
 /// \param[in] uint8_t : Command value to be written.
 /// \param[in] void* caller_context : When this function calls any callbacks
-///         from the `ms8607_host_functions` structure, this will be passed
+///         from the `ms5840_host_functions` structure, this will be passed
 ///         directly to those callbacks' `caller_context` parameter.
 ///
-/// \return ms8607_status : status of MS8607
-///       - ms8607_status_ok : I2C transfer completed successfully
-///       - ms8607_status_callback_error : Error occurred within a ms8607_host_functions function
+/// \return ms5840_status : status of MS5840
+///       - ms5840_status_ok : I2C transfer completed successfully
+///       - ms5840_status_callback_error : Error occurred within a ms5840_host_functions function
 ///
-static enum ms8607_status psensor_write_command(ms8607_sensor *sensor, uint8_t cmd, void *caller_context)
+static enum ms5840_status psensor_write_command(ms5840_sensor *sensor, uint8_t cmd, void *caller_context)
 {
 	assert( sensor != NULL );
 	uint8_t data[1];
 
 	data[0] = cmd;
 
-	ms8607_i2c_controller_packet transfer = {
+	ms5840_i2c_controller_packet transfer = {
 		.address     = PSENSOR_ADDR,
 		.data_length = 1,
 		.data        = data,
@@ -1352,57 +1352,57 @@ static enum ms8607_status psensor_write_command(ms8607_sensor *sensor, uint8_t c
 
 /// \brief Set pressure ADC resolution.
 ///
-/// \param[in] ms8607_sensor *sensor : Object representing the sensor to configure
-/// \param[in] ms8607_pressure_resolution : Resolution requested
+/// \param[in] ms5840_sensor *sensor : Object representing the sensor to configure
+/// \param[in] ms5840_pressure_resolution : Resolution requested
 /// \param[in] void* caller_context : When this function calls any callbacks
-///         from the `ms8607_host_functions` structure, this will be passed
+///         from the `ms5840_host_functions` structure, this will be passed
 ///         directly to those callbacks' `caller_context` parameter.
 ///         (As of this writing, this function does not do any I2C I/O and
 ///         does not call any host functions, so `caller_context` is unused here,
 ///         but nonetheless provided for sake of future-proofing.)
 ///
-/// \return ms8607_status : status of MS8607
-///       - ms8607_status_ok
-///       - ms8607_status_null_sensor : The pointer provided for the `sensor` parameter was NULL.
+/// \return ms5840_status : status of MS5840
+///       - ms5840_status_ok
+///       - ms5840_status_null_sensor : The pointer provided for the `sensor` parameter was NULL.
 ///
 ///
-enum ms8607_status  ms8607_set_pressure_resolution(ms8607_sensor *sensor, enum ms8607_pressure_resolution res, void *caller_context)
+enum ms5840_status  ms5840_set_pressure_resolution(ms5840_sensor *sensor, enum ms5840_pressure_resolution res, void *caller_context)
 {
 	(void)caller_context;
 	if ( sensor == NULL )
-		return ms8607_status_null_sensor;
+		return ms5840_status_null_sensor;
 
 	sensor->psensor_resolution_osr = res;
-	return ms8607_status_ok;
+	return ms5840_status_ok;
 }
 
 /// \brief Reads the psensor EEPROM coefficient stored at address provided.
 ///
-/// \param[in] ms8607_sensor *sensor : Object representing the sensor to retrieve EEPROM coefficients from
+/// \param[in] ms5840_sensor *sensor : Object representing the sensor to retrieve EEPROM coefficients from
 /// \param[in] uint8_t : Address of coefficient in EEPROM
 /// \param[out] uint16_t* : Value read in EEPROM
 /// \param[in] void* caller_context : When this function calls any callbacks
-///         from the `ms8607_host_functions` structure, this will be passed
+///         from the `ms5840_host_functions` structure, this will be passed
 ///         directly to those callbacks' `caller_context` parameter.
 ///
-/// \return ms8607_status : status of MS8607
-///       - ms8607_status_ok : All operations completed successfully
-///       - ms8607_status_callback_error : Error occurred within a ms8607_host_functions function
-///       - ms8607_status_eeprom_is_zero : One or more EEPROM coefficients were received as 0, preventing measurement.
+/// \return ms5840_status : status of MS5840
+///       - ms5840_status_ok : All operations completed successfully
+///       - ms5840_status_callback_error : Error occurred within a ms5840_host_functions function
+///       - ms5840_status_eeprom_is_zero : One or more EEPROM coefficients were received as 0, preventing measurement.
 ///
-static enum ms8607_status psensor_read_eeprom_coeff(ms8607_sensor *sensor, uint8_t command, uint16_t *coeff, void *caller_context)
+static enum ms5840_status psensor_read_eeprom_coeff(ms5840_sensor *sensor, uint8_t command, uint16_t *coeff, void *caller_context)
 {
 	assert( sensor != NULL );
 	assert( coeff != NULL );
 
-	enum ms8607_status status;
+	enum ms5840_status status;
 	uint8_t buffer[2];
 
 	buffer[0] = 0;
 	buffer[1] = 0;
 
 	/* Read data */
-	ms8607_i2c_controller_packet read_transfer = {
+	ms5840_i2c_controller_packet read_transfer = {
 		.address     = PSENSOR_ADDR,
 		.data_length = 2,
 		.data        = buffer,
@@ -1410,76 +1410,76 @@ static enum ms8607_status psensor_read_eeprom_coeff(ms8607_sensor *sensor, uint8
 
 	// Send the conversion command
 	status = psensor_write_command(sensor, command, caller_context);
-	if(status != ms8607_status_ok)
+	if(status != ms5840_status_ok)
 		return status;
 
 	status = sensor->host_funcs->i2c_controller_read(caller_context, &read_transfer);
-	if(status != ms8607_status_ok)
+	if(status != ms5840_status_ok)
 		return status;
 
 	*coeff = (buffer[0] << 8) | buffer[1];
 
 	if (*coeff == 0)
-		return ms8607_status_eeprom_is_zero;
+		return ms5840_status_eeprom_is_zero;
 
-	return ms8607_status_ok;
+	return ms5840_status_ok;
 }
 
-/// \brief Reads the ms8607 EEPROM coefficients to store them for computation.
+/// \brief Reads the ms5840 EEPROM coefficients to store them for computation.
 ///
-/// \param[in] ms8607_sensor *sensor : Object representing the sensor to retrieve EEPROM coefficients from
+/// \param[in] ms5840_sensor *sensor : Object representing the sensor to retrieve EEPROM coefficients from
 /// \param[in] void* caller_context : When this function calls any callbacks
-///         from the `ms8607_host_functions` structure, this will be passed
+///         from the `ms5840_host_functions` structure, this will be passed
 ///         directly to those callbacks' `caller_context` parameter.
 ///
-/// \return ms8607_status : status of MS8607
-///       - ms8607_status_ok : All operations completed successfully
-///       - ms8607_status_callback_error : Error occurred within a ms8607_host_functions function
-///       - ms8607_status_eeprom_is_zero : One or more EEPROM coefficients were received as 0, preventing measurement.
-///       - ms8607_status_eeprom_crc_error : CRC check error on the sensor's EEPROM coefficients
+/// \return ms5840_status : status of MS5840
+///       - ms5840_status_ok : All operations completed successfully
+///       - ms5840_status_callback_error : Error occurred within a ms5840_host_functions function
+///       - ms5840_status_eeprom_is_zero : One or more EEPROM coefficients were received as 0, preventing measurement.
+///       - ms5840_status_eeprom_crc_error : CRC check error on the sensor's EEPROM coefficients
 ///
-static enum ms8607_status psensor_read_eeprom(ms8607_sensor *sensor, void *caller_context)
+static enum ms5840_status psensor_read_eeprom(ms5840_sensor *sensor, void *caller_context)
 {
 	assert( sensor != NULL );
-	enum ms8607_status status;
+	enum ms5840_status status;
 	uint8_t i;
 
-	for( i=0 ; i< MS8607_COEFFICIENT_COUNT ; i++)
+	for( i=0 ; i< MS5840_COEFFICIENT_COUNT ; i++)
 	{
 		status = psensor_read_eeprom_coeff(
 			sensor, PROM_ADDRESS_READ_ADDRESS_0 + i*2, sensor->eeprom_coeff+i, caller_context);
-		if(status != ms8607_status_ok)
+		if(status != ms5840_status_ok)
 			return status;
 	}
 
 	if( !psensor_crc_check( sensor->eeprom_coeff, (sensor->eeprom_coeff[CRC_INDEX] & 0xF000)>>12 ) )
-		return ms8607_status_eeprom_crc_error;
+		return ms5840_status_eeprom_crc_error;
 
 	sensor->psensor_coeff_read = true;
 
-	return ms8607_status_ok;
+	return ms5840_status_ok;
 }
 
 /// \brief Triggers conversion and reading of ADC value
 ///
-/// \param[in] ms8607_sensor *sensor : Object representing the sensor to read the adc from
+/// \param[in] ms5840_sensor *sensor : Object representing the sensor to read the adc from
 /// \param[in] uint8_t : Command used for conversion (will determine Temperature vs Pressure and osr)
 /// \param[out] uint32_t* : ADC value.
 /// \param[in] void* caller_context : When this function calls any callbacks
-///         from the `ms8607_host_functions` structure, this will be passed
+///         from the `ms5840_host_functions` structure, this will be passed
 ///         directly to those callbacks' `caller_context` parameter.
 ///
-/// \return ms8607_status : status of MS8607
-///       - ms8607_status_ok : All operations completed successfully
-///       - ms8607_status_callback_error : Error occurred within a ms8607_host_functions function
-///       - ms8607_status_measurement_invalid : I2C transfer(s) completed, but data received was invalid
+/// \return ms5840_status : status of MS5840
+///       - ms5840_status_ok : All operations completed successfully
+///       - ms5840_status_callback_error : Error occurred within a ms5840_host_functions function
+///       - ms5840_status_measurement_invalid : I2C transfer(s) completed, but data received was invalid
 ///
-static enum ms8607_status psensor_conversion_and_read_adc(ms8607_sensor *sensor, uint8_t cmd, uint32_t *adc, void *caller_context)
+static enum ms5840_status psensor_conversion_and_read_adc(ms5840_sensor *sensor, uint8_t cmd, uint32_t *adc, void *caller_context)
 {
 	assert( sensor != NULL );
 	assert( adc != NULL );
 
-	enum ms8607_status status;
+	enum ms5840_status status;
 	uint8_t buffer[3];
 
 	buffer[0] = 0;
@@ -1487,7 +1487,7 @@ static enum ms8607_status psensor_conversion_and_read_adc(ms8607_sensor *sensor,
 	buffer[2] = 0;
 
 	/* Read data */
-    ms8607_i2c_controller_packet read_transfer = {
+    ms5840_i2c_controller_packet read_transfer = {
 		.address     = PSENSOR_ADDR,
 		.data_length = 3,
 		.data        = buffer,
@@ -1496,7 +1496,7 @@ static enum ms8607_status psensor_conversion_and_read_adc(ms8607_sensor *sensor,
 	// TODO: implement?
 #if 0
 	status = psensor_write_command(sensor, cmd, caller_context);
-	if( status != ms8607_status_ok)
+	if( status != ms5840_status_ok)
 		return status;
 
 	while ( microsecs() < psensor_conversion_time[ (cmd & PSENSOR_CONVERSION_OSR_MASK)/2 ] )
@@ -1504,11 +1504,11 @@ static enum ms8607_status psensor_conversion_and_read_adc(ms8607_sensor *sensor,
 
 	// Send the read command
 	status = psensor_write_command(sensor, PSENSOR_READ_ADC, caller_context);
-	if( status != ms8607_status_ok)
+	if( status != ms5840_status_ok)
 		return status;
 
     status = sensor->host_funcs->i2c_controller_read(caller_context, &read_transfer);
-	if( status != ms8607_status_ok )
+	if( status != ms5840_status_ok )
 		return status;
 
 	// TODO: If failure, should probably send reset sequence?
@@ -1526,16 +1526,16 @@ static enum ms8607_status psensor_conversion_and_read_adc(ms8607_sensor *sensor,
 	status = psensor_write_command(sensor, cmd, caller_context);
 	// 20ms wait for conversion
 	sensor->host_funcs->sleep_ms(caller_context, psensor_conversion_time[ (cmd & PSENSOR_CONVERSION_OSR_MASK)/2 ]/1000);
-	if( status != ms8607_status_ok)
+	if( status != ms5840_status_ok)
 		return status;
 
 	// Send the read command
 	status = psensor_write_command(sensor, PSENSOR_READ_ADC, caller_context);
-	if( status != ms8607_status_ok)
+	if( status != ms5840_status_ok)
 		return status;
 
     status = sensor->host_funcs->i2c_controller_read(caller_context, &read_transfer);
-	if( status != ms8607_status_ok )
+	if( status != ms5840_status_ok )
 		return status;
 
 	*adc = ((uint32_t)buffer[0] << 16) | ((uint32_t)buffer[1] << 8) | buffer[2];
@@ -1545,27 +1545,27 @@ static enum ms8607_status psensor_conversion_and_read_adc(ms8607_sensor *sensor,
 
 /// \brief Compute temperature and pressure
 ///
-/// \param[in] ms8607_sensor *sensor : Object representing the sensor to read temperature and pressure from
+/// \param[in] ms5840_sensor *sensor : Object representing the sensor to read temperature and pressure from
 /// \param[out] float* : Celsius Degree temperature value
 /// \param[out] float* : mbar pressure value
 /// \param[in] void* caller_context : When this function calls any callbacks
-///         from the `ms8607_host_functions` structure, this will be passed
+///         from the `ms5840_host_functions` structure, this will be passed
 ///         directly to those callbacks' `caller_context` parameter.
 ///
-/// \return ms8607_status : status of MS8607
-///       - ms8607_status_ok : All operations completed successfully
-///       - ms8607_status_callback_error : Error occurred within a ms8607_host_functions function
-///       - ms8607_status_eeprom_is_zero : One or more EEPROM coefficients were received as 0, preventing measurement.
-///       - ms8607_status_eeprom_crc_error : CRC check error on the sensor's EEPROM coefficients
-///       - ms8607_status_measurement_invalid : EEPROM is OK and I2C transfer completed, but data received was invalid
+/// \return ms5840_status : status of MS5840
+///       - ms5840_status_ok : All operations completed successfully
+///       - ms5840_status_callback_error : Error occurred within a ms5840_host_functions function
+///       - ms5840_status_eeprom_is_zero : One or more EEPROM coefficients were received as 0, preventing measurement.
+///       - ms5840_status_eeprom_crc_error : CRC check error on the sensor's EEPROM coefficients
+///       - ms5840_status_measurement_invalid : EEPROM is OK and I2C transfer completed, but data received was invalid
 ///
-static enum ms8607_status psensor_read_pressure_and_temperature(ms8607_sensor *sensor, int32_t *temperature, int32_t *pressure, void *caller_context)
+static enum ms5840_status psensor_read_pressure_and_temperature(ms5840_sensor *sensor, int32_t *temperature, int32_t *pressure, void *caller_context)
 {
 	assert( sensor      != NULL );
 	assert( temperature != NULL );
 	assert( pressure    != NULL );
 
-	enum ms8607_status status = ms8607_status_ok;
+	enum ms5840_status status = ms5840_status_ok;
 	uint32_t adc_temperature, adc_pressure;
 	int32_t dT, TEMP;
 	int64_t OFF, SENS, P, T2, OFF2, SENS2;
@@ -1574,25 +1574,25 @@ static enum ms8607_status psensor_read_pressure_and_temperature(ms8607_sensor *s
 	// If first time adc is requested, get EEPROM coefficients
 	if( sensor->psensor_coeff_read == false )
 		status = psensor_read_eeprom(sensor, caller_context);
-	if( status != ms8607_status_ok)
+	if( status != ms5840_status_ok)
 		return status;
 
 	// First read temperature
 	cmd = sensor->psensor_resolution_osr*2;
 	cmd |= PSENSOR_START_TEMPERATURE_ADC_CONVERSION;
 	status = psensor_conversion_and_read_adc(sensor, cmd, &adc_temperature, caller_context);
-	if( status != ms8607_status_ok)
+	if( status != ms5840_status_ok)
 		return status;
 
 	// Now read pressure
 	cmd = sensor->psensor_resolution_osr*2;
 	cmd |= PSENSOR_START_PRESSURE_ADC_CONVERSION;
 	status = psensor_conversion_and_read_adc(sensor, cmd, &adc_pressure, caller_context);
-	if( status != ms8607_status_ok)
+	if( status != ms5840_status_ok)
 		return status;
 
 	if (adc_temperature == 0 || adc_pressure == 0)
-		return ms8607_status_measurement_invalid;
+		return ms5840_status_measurement_invalid;
 
 	// Difference between actual and reference temperature = D2 - Tref
 	dT = (int32_t)adc_temperature - ( (int32_t)sensor->eeprom_coeff[REFERENCE_TEMPERATURE_INDEX] <<8 );
@@ -1662,50 +1662,50 @@ static enum ms8607_status psensor_read_pressure_and_temperature(ms8607_sensor *s
 // into a nice API that could be used for other sensors. Maybe someday.)
 //
 // Other important note: this was hacked together quickly so I could run
-// experiments, and so it has global state outside of the ms8607_sensor struct.
+// experiments, and so it has global state outside of the ms5840_sensor struct.
 // That's bad and mean and shouldn't be part of the experience when using
 // this driver, so please leave this reference code commented out unless
 // you are going to finish my original visions, or at least remove the
 // global state and deduplicate the contents of these functions from
 // the places I copied them from. (The global state makes it impossible
-// to, without spurious unexpected behavior, use more than one ms8607 sensor
+// to, without spurious unexpected behavior, use more than one ms5840 sensor
 // at the same time.)
 //
-static uint64_t ms8607_time_of_last_temperature_request = 0;
+static uint64_t ms5840_time_of_last_temperature_request = 0;
 
-enum ms8607_status psensor_request_temperature(ms8607_sensor *sensor, uint64_t microsecs, void *caller_context)
+enum ms5840_status psensor_request_temperature(ms5840_sensor *sensor, uint64_t microsecs, void *caller_context)
 {
 	assert( sensor != NULL );
 
-	enum ms8607_status status = ms8607_status_ok;
+	enum ms5840_status status = ms5840_status_ok;
 	uint8_t cmd;
 
 	cmd = sensor->psensor_resolution_osr*2;
 	cmd |= PSENSOR_START_TEMPERATURE_ADC_CONVERSION;
 
 	status = psensor_write_command(sensor, cmd, caller_context);
-	if( status != ms8607_status_ok)
+	if( status != ms5840_status_ok)
 		return status;
 
-	ms8607_time_of_last_temperature_request = microsecs;
+	ms5840_time_of_last_temperature_request = microsecs;
 
 	return status;
 }
 
-enum ms8607_status psensor_poll_raw_temperature(ms8607_sensor *sensor, uint64_t microsecs, uint32_t *temperature, void *caller_context)
+enum ms5840_status psensor_poll_raw_temperature(ms5840_sensor *sensor, uint64_t microsecs, uint32_t *temperature, void *caller_context)
 {
 	assert( sensor != NULL );
 	assert( temperature != NULL );
 
-	enum ms8607_status status = ms8607_status_ok;
+	enum ms5840_status status = ms5840_status_ok;
 	uint8_t cmd;
 
 	cmd = sensor->psensor_resolution_osr*2;
 	cmd |= PSENSOR_START_TEMPERATURE_ADC_CONVERSION;
 
 	uint64_t delay_us = psensor_conversion_time[ (cmd & PSENSOR_CONVERSION_OSR_MASK)/2 ];
-	if ( ((int64_t)microsecs - ms8607_time_of_last_temperature_request) < delay_us )
-		return ms8607_status_waiting;
+	if ( ((int64_t)microsecs - ms5840_time_of_last_temperature_request) < delay_us )
+		return ms5840_status_waiting;
 
 	uint8_t buffer[3];
 
@@ -1714,7 +1714,7 @@ enum ms8607_status psensor_poll_raw_temperature(ms8607_sensor *sensor, uint64_t 
 	buffer[2] = 0;
 
 	/* Read data */
-    ms8607_i2c_controller_packet read_transfer = {
+    ms5840_i2c_controller_packet read_transfer = {
 		.address     = PSENSOR_ADDR,
 		.data_length = 3,
 		.data        = buffer,
@@ -1722,11 +1722,11 @@ enum ms8607_status psensor_poll_raw_temperature(ms8607_sensor *sensor, uint64_t 
 
 	// Send the read command
 	status = psensor_write_command(sensor, PSENSOR_READ_ADC, caller_context);
-	if( status != ms8607_status_ok)
+	if( status != ms5840_status_ok)
 		return status;
 
     status = sensor->host_funcs->i2c_controller_read(caller_context, &read_transfer);
-	if( status != ms8607_status_ok )
+	if( status != ms5840_status_ok )
 		return status;
 
 	*temperature = ((uint32_t)buffer[0] << 16) | ((uint32_t)buffer[1] << 8) | buffer[2];
@@ -1734,41 +1734,41 @@ enum ms8607_status psensor_poll_raw_temperature(ms8607_sensor *sensor, uint64_t 
 	return status;
 }
 
-static int64_t ms8607_time_of_last_pressure_request = 0;
+static int64_t ms5840_time_of_last_pressure_request = 0;
 
-enum ms8607_status psensor_request_pressure(ms8607_sensor *sensor, uint64_t microsecs, void *caller_context)
+enum ms5840_status psensor_request_pressure(ms5840_sensor *sensor, uint64_t microsecs, void *caller_context)
 {
 	assert( sensor != NULL );
 
-	enum ms8607_status status = ms8607_status_ok;
+	enum ms5840_status status = ms5840_status_ok;
 	uint8_t cmd;
 
 	cmd = sensor->psensor_resolution_osr*2;
 	cmd |= PSENSOR_START_PRESSURE_ADC_CONVERSION;
 
 	status = psensor_write_command(sensor, cmd, caller_context);
-	if( status != ms8607_status_ok)
+	if( status != ms5840_status_ok)
 		return status;
 
-	ms8607_time_of_last_pressure_request = microsecs;
+	ms5840_time_of_last_pressure_request = microsecs;
 
 	return status;
 }
 
-enum ms8607_status psensor_poll_raw_pressure(ms8607_sensor *sensor, uint64_t microsecs, uint32_t *pressure, void *caller_context)
+enum ms5840_status psensor_poll_raw_pressure(ms5840_sensor *sensor, uint64_t microsecs, uint32_t *pressure, void *caller_context)
 {
 	assert( sensor != NULL );
 	assert( pressure != NULL );
 
-	enum ms8607_status status = ms8607_status_ok;
+	enum ms5840_status status = ms5840_status_ok;
 	uint8_t cmd;
 
 	cmd = sensor->psensor_resolution_osr*2;
 	cmd |= PSENSOR_START_PRESSURE_ADC_CONVERSION;
 
 	int64_t delay_us = psensor_conversion_time[ (cmd & PSENSOR_CONVERSION_OSR_MASK)/2 ];
-	if ( ((int64_t)microsecs - ms8607_time_of_last_pressure_request) < (int64_t)delay_us )
-		return ms8607_status_waiting;
+	if ( ((int64_t)microsecs - ms5840_time_of_last_pressure_request) < (int64_t)delay_us )
+		return ms5840_status_waiting;
 
 	uint8_t buffer[3];
 
@@ -1777,7 +1777,7 @@ enum ms8607_status psensor_poll_raw_pressure(ms8607_sensor *sensor, uint64_t mic
 	buffer[2] = 0;
 
 	/* Read data */
-    ms8607_i2c_controller_packet read_transfer = {
+    ms5840_i2c_controller_packet read_transfer = {
 		.address     = PSENSOR_ADDR,
 		.data_length = 3,
 		.data        = buffer,
@@ -1785,11 +1785,11 @@ enum ms8607_status psensor_poll_raw_pressure(ms8607_sensor *sensor, uint64_t mic
 
 	// Send the read command
 	status = psensor_write_command(sensor, PSENSOR_READ_ADC, caller_context);
-	if( status != ms8607_status_ok)
+	if( status != ms5840_status_ok)
 		return status;
 
     status = sensor->host_funcs->i2c_controller_read(caller_context, &read_transfer);
-	if( status != ms8607_status_ok )
+	if( status != ms5840_status_ok )
 		return status;
 
 	*pressure = ((uint32_t)buffer[0] << 16) | ((uint32_t)buffer[1] << 8) | buffer[2];
@@ -1813,10 +1813,10 @@ bool psensor_crc_check (uint16_t *n_prom, uint8_t crc)
 
 	n_rem = 0x00;
 	crc_read = n_prom[0];
-	n_prom[MS8607_COEFFICIENT_COUNT] = 0;
+	n_prom[MS5840_COEFFICIENT_COUNT] = 0;
 	n_prom[0] = (0x0FFF & (n_prom[0]));    // Clear the CRC byte
 
-	for( cnt = 0 ; cnt < (MS8607_COEFFICIENT_COUNT+1)*2 ; cnt++ ) {
+	for( cnt = 0 ; cnt < (MS5840_COEFFICIENT_COUNT+1)*2 ; cnt++ ) {
 
 		// Get next byte
 		if (cnt%2 == 1)
@@ -1838,62 +1838,62 @@ bool psensor_crc_check (uint16_t *n_prom, uint8_t crc)
 	return  ( n_rem == crc );
 }
 
-const char *ms8607_stringize_error(enum ms8607_status error_code)
+const char *ms5840_stringize_error(enum ms5840_status error_code)
 {
 	switch(error_code)
 	{
-		case ms8607_status_ok:
-			return "Status OK, success. (ms8607_status_ok)";
+		case ms5840_status_ok:
+			return "Status OK, success. (ms5840_status_ok)";
 
-		case ms8607_status_waiting:
-			return "Status OK, but waiting for sensor to respond. (ms8607_status_waiting)";
+		case ms5840_status_waiting:
+			return "Status OK, but waiting for sensor to respond. (ms5840_status_waiting)";
 
-		case ms8607_status_null_argument:
-			return "Error: A function in the ms8607 driver was called with a NULL argument when a non-NULL argument was required. (ms8607_status_null_argument)";
+		case ms5840_status_null_argument:
+			return "Error: A function in the ms5840 driver was called with a NULL argument when a non-NULL argument was required. (ms5840_status_null_argument)";
 
-		case ms8607_status_null_sensor:
-			return "Error: A function in the ms8607 driver was given a NULL pointer to a `ms8607_sensor` object. These are required to be non-NULL. (ms8607_status_null_sensor)";
+		case ms5840_status_null_sensor:
+			return "Error: A function in the ms5840 driver was given a NULL pointer to a `ms5840_sensor` object. These are required to be non-NULL. (ms5840_status_null_sensor)";
 
-		case ms8607_status_null_host_function:
-			return "Error: A member of the `ms8607_host_functions` structure was NULL. This could lead to crashing and unpredictable behavior later on. (ms8607_status_null_host_function)";
+		case ms5840_status_null_host_function:
+			return "Error: A member of the `ms5840_host_functions` structure was NULL. This could lead to crashing and unpredictable behavior later on. (ms5840_status_null_host_function)";
 
-		case ms8607_status_callback_error:
-			return "Error occurred within a function dispatched from the `ms8607_host_functions` structure. (ms8607_status_callback_error)";
+		case ms5840_status_callback_error:
+			return "Error occurred within a function dispatched from the `ms5840_host_functions` structure. (ms5840_status_callback_error)";
 
-		case ms8607_status_callback_i2c_nack:
-			return "I2C transfer did not complete. Peripheral responded with NACK. (ms8607_status_callback_i2c_nack)";
+		case ms5840_status_callback_i2c_nack:
+			return "I2C transfer did not complete. Peripheral responded with NACK. (ms5840_status_callback_i2c_nack)";
 
-		case ms8607_status_eeprom_is_zero: // Formerly ms8607_status_crc_error
-			return "One or more EEPROM coefficients were received as 0, preventing measurement. (ms8607_status_eeprom_is_zero)";
+		case ms5840_status_eeprom_is_zero: // Formerly ms5840_status_crc_error
+			return "One or more EEPROM coefficients were received as 0, preventing measurement. (ms5840_status_eeprom_is_zero)";
 
-		case ms8607_status_eeprom_crc_error: // Formerly ms8607_status_crc_error
-			return "EEPROM coefficients retrieved from the MS8607 did not pass CRC check. (ms8607_status_eeprom_crc_error)";
+		case ms5840_status_eeprom_crc_error: // Formerly ms5840_status_crc_error
+			return "EEPROM coefficients retrieved from the MS5840 did not pass CRC check. (ms5840_status_eeprom_crc_error)";
 
-		case ms8607_status_measurement_invalid: // Formerly ms8607_status_i2c_transfer_error
-			return "EEPROM is OK and I2C transfer completed, but data received was invalid. (ms8607_status_measurement_invalid)";
+		case ms5840_status_measurement_invalid: // Formerly ms5840_status_i2c_transfer_error
+			return "EEPROM is OK and I2C transfer completed, but data received was invalid. (ms5840_status_measurement_invalid)";
 
-		case ms8607_status_heater_on_error:
-			return "Cannot compute compensated humidity because heater is on. (ms8607_status_heater_on_error)";
+		case ms5840_status_heater_on_error:
+			return "Cannot compute compensated humidity because heater is on. (ms5840_status_heater_on_error)";
 
-		case ms8607_status_i2c_read_unimplemented:
-			return "An implementation for the `ms8607_host_functions.i2c_controller_read`"
+		case ms5840_status_i2c_read_unimplemented:
+			return "An implementation for the `ms5840_host_functions.i2c_controller_read`"
 				" function was not provided, but was needed to complete an operation.";
 
-		case ms8607_status_i2c_write_unimplemented:
-			return "An implementation for the `ms8607_host_functions.i2c_controller_write`"
+		case ms5840_status_i2c_write_unimplemented:
+			return "An implementation for the `ms5840_host_functions.i2c_controller_write`"
 				" function was not provided, but was needed to complete an operation.";
 
-		case ms8607_status_i2c_write_no_stop_unimplemented:
-			return "An implementation for the `ms8607_host_functions.i2c_controller_write_no_stop`"
+		case ms5840_status_i2c_write_no_stop_unimplemented:
+			return "An implementation for the `ms5840_host_functions.i2c_controller_write_no_stop`"
 				" function was not provided, but was needed to complete an operation.";
 
-		case ms8607_status_sleep_ms_unimplemented:
-			return "An implementation for the `ms8607_host_functions.sleep_ms`"
+		case ms5840_status_sleep_ms_unimplemented:
+			return "An implementation for the `ms5840_host_functions.sleep_ms`"
 				" function was not provided, but was needed to complete an operation.";
 
 		default: break;
 	}
-	return "Error code is not a valid ms8607_status.";
+	return "Error code is not a valid ms5840_status.";
 }
 
 #ifdef __cplusplus
